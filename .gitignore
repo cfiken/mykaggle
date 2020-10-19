@@ -1,4 +1,3 @@
-!.gitkeep
 # my ignore list: dir
 data/*
 log/*
@@ -72,3 +71,5 @@ dmypy.json
 
 # .npy
 *.npy
+
+!.gitkeep
