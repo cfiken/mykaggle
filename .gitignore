@@ -1,7 +1,7 @@
 # my ignore list: dir
-data/*
-log/*
-ckpt/*
+data
+log
+ckpt
 mlruns
 
 # my ignore list: file
