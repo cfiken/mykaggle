@@ -1,0 +1,5 @@
+#!/bin/sh
+
+poetry run flake8
+poetry run mypy ./
+CUDA_VISIBLE_DEVICES='' poetry run pytest

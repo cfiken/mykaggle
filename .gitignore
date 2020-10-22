@@ -7,7 +7,6 @@ mlruns
 # my ignore list: file
 submission.csv
 *.pkl
-mykaggle/util/report.py
 
 # vscode
 .vscode

@@ -10,7 +10,7 @@ class Slack:
     channel_name = '#kaggle-log'
     env_webhook_url = 'MY_SLACK_WEBHOOK_URL'
 
-    __slots__ = ['_url', '_logger']
+    __slots__ = ['_url']
 
     def __init__(self, web_hook_url: Optional[str] = None) -> None:
         if web_hook_url is None and self.env_webhook_url in os.environ:
@@ -33,5 +33,4 @@ class Slack:
         payload = {}
         payload['text'] = message
         response = requests.post(self._url, data=json.dumps(payload))
-        self._logger.debug(response)
         return response
