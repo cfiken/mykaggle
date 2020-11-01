@@ -1,0 +1,25 @@
+# 開発用コンテナ群
+
+version: "3.7"
+services:
+  mykaggle:
+    image: mykaggle
+    command: ["poetry", "run", "jupyter", "lab", "--port", "8890"]
+    container_name: mykaggle
+    restart: "no"
+    ports:
+      - target: 8890
+        published: 8890
+        protocol: tcp
+        mode: host
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+      - type: bind
+        source: $SSH_AUTH_SOCK
+        target: /ssh-agent
+    environment:
+      SSH_AUTH_SOCK: /ssh-agent
+    tty: true
+    stdin_open: true

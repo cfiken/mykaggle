@@ -23,6 +23,7 @@ fastprogress = "*"
 kaggle = "*"
 pyyaml = "*"
 mlflow = "*"
+python-dotenv = "^0.15.0"
 
 
 [tool.poetry.dev-dependencies]
