@@ -46,6 +46,7 @@ class Feature(metaclass=ABCMeta):
         others: Optional[Dict[str, pd.DataFrame]] = None,
         use_cache: bool = False,
         save_cache: bool = False,
+        merge: bool = True,
         *args, **kwargs
     ) -> pd.DataFrame:
         '''
@@ -64,8 +65,11 @@ class Feature(metaclass=ABCMeta):
         feature = self.create(base, others, *args, **kwargs)
         if save_cache:
             self._save(feature)
-        merge = pd.merge(base, feature, how=self._merge_how, on=self._merge_on)
-        return merge
+        if merge:
+            output = pd.merge(base, feature, how=self._merge_how, on=self._merge_on)
+        else:
+            output = pd.concat([base, feature], axis=1)
+        return output
 
     def _load(self) -> pd.DataFrame:
         return pd.read_feather(self._path)
