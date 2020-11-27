@@ -23,7 +23,7 @@ class Slack:
         message = f'{job_name} が終わったようだな'
         self._notify(message)
 
-    def notify_failed(self, job_name: str, error: Optional[Union[Exception, str]] = None) -> None:
+    def notify_failure(self, job_name: str, error: Optional[Union[Exception, KeyboardInterrupt, str]] = None) -> None:
         message = f'{job_name} failed. なぜだぁ なぜ死んだァ~~~~\n'
         if error:
             message += f'ERROR: {error}'

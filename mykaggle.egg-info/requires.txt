@@ -1,0 +1,17 @@
+fastprogress
+jupyter
+jupyterlab
+kaggle
+lightgbm
+matplotlib
+mlflow
+numpy
+pandas
+pillow
+python-dotenv<0.16.0,>=0.15.0
+pyyaml
+seaborn
+tensorflow-addons
+tensorflow-datasets
+tensorflow==2.2.1
+transformers
