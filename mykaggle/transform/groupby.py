@@ -13,9 +13,9 @@ class BaseGroupByTransform(BaseTransform):
     def __init__(self, keys: List[str], targets: List[str], aggs: List[str]) -> None:
         '''
         Args:
-          keys: 集約キー
-          targets: 集約後に計算を行うカラム
-          aggs: 集約後に行う演算
+            keys: 集約キー
+            targets: 集約後に計算を行うカラム
+            aggs: 集約後に行う演算
         '''
         self.keys = keys
         self.targets = targets
@@ -50,12 +50,18 @@ class BaseGroupByTransform(BaseTransform):
         return ['_'.join([a, target, 'groupby'] + keys) for target in targets for a in aggs]
 
 
-class BasicGroupByTransform(BaseGroupByTransform):
+class GroupByTransform(BaseGroupByTransform):
     '''
     mean/median/sum/std など、基本的な演算を行う GroupByTransform.
     '''
 
     def __init__(self, keys: List[str], targets: List[str], aggs: List[str]) -> None:
+        '''
+        Args:
+            keys: 集約キー
+            targets: 集約後に計算を行うカラム
+            aggs: 集約後に行う演算
+        '''
         self.keys = keys
         self.targets = targets
         self.aggs = aggs
