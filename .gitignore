@@ -3,6 +3,7 @@ data
 log
 ckpt
 mlruns
+catboost_info
 
 # my ignore list: file
 submission.csv
