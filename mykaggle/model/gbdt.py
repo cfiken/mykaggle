@@ -75,10 +75,15 @@ class GBDT:
                 **self._params_as_kwargs(self._params)
             )
 
-    def predict(self, inputs: np.ndarray) -> np.ndarray:
+    def predict(
+        self,
+        inputs: Union[pd.DataFrame, np.ndarray],
+        feature_names: Optional[List[str]] = None
+    ) -> np.ndarray:
         if self._is_lightgbm:
             pred = self._model.predict(inputs)
         elif self._is_xgboost:
+            feature_names = feature_names or inputs.columns
             inputs = xgb.DMatrix(inputs)
             pred = self._model.predict(inputs, ntree_limit=self._model.best_ntree_limit)
         elif self._is_catboost:

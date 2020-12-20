@@ -3,13 +3,14 @@ from typing import Dict, Optional
 import pandas as pd
 from pathlib import Path
 
+from mykaggle.lib.registrable import Registrable
 from mykaggle.util.logger import get_logger
 
 FEATURE_DIR = Path('../data/feature/')
 logger = get_logger(__name__)
 
 
-class Feature(metaclass=ABCMeta):
+class Feature(Registrable, metaclass=ABCMeta):
     '''
     ひとまとまりの特徴を表すベースクラス。
     特徴を作成する create を実装することで、キャッシュ付き特徴作成クラスとして使える。
@@ -46,16 +47,16 @@ class Feature(metaclass=ABCMeta):
         others: Optional[Dict[str, pd.DataFrame]] = None,
         use_cache: bool = False,
         save_cache: bool = False,
-        merge: bool = True,
+        merge: bool = False,
         *args, **kwargs
     ) -> pd.DataFrame:
         '''
         特徴を実際に使うときに呼ぶメソッド。
         前後にキャッシュとして特徴を保存する/キャッシュされた特徴をロードするようにしている。
-        :params base: 最終的に merge する index を含む DataFrame
-        :params others: 特徴を作るための他の Base 以外の DataFrame, dict の形で渡す
+        :params base: 最終的に merge する対象となる DataFrame, index をこれに合わせることになる
+        :params others: 特徴を作るための DataFrame, dict の形で渡す
         :params use_cache: キャッシュを使うかどうか
-        :params save_cache: 作成した特徴を保存するかどうか
+        :params save_cache: 作成した特徴をキャッシュとして保存するかどうか
         '''
         if use_cache:
             if not self._path.exists():
