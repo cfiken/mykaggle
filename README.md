@@ -13,3 +13,9 @@ There are some directories, utils, and CI settings to use this repository at Kag
 - log: not used now
 - kaggle_datasets_git: to upload this repository to kaggle datasets (using only in CI)
 - kaggle_datasets_ckpt: to upload some ckpt files to kaggle datasets
+
+
+# Acknowledgements
+
+- https://github.com/Ynakatsuka/kaggle_utils
+    - Some feature engineering codes are based on @Ynakatsuka 's repository.
