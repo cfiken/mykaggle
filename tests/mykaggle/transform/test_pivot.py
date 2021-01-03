@@ -8,6 +8,7 @@ from mykaggle.transform.pivot import PivotTransform
 class TestPivotTransform:
     def test_prepare_columns(self):
         df = pd.read_csv('./tests/data/dummy.csv')
+        df = df[(df['b'] == 'aa') | (df['b'] == 'bb')]
         indices = ['a']
         target = 'x'
         column = 'b'
@@ -25,6 +26,7 @@ class TestPivotTransform:
 
     def test_prepare_columns_with_multi_indices(self):
         df = pd.read_csv('./tests/data/dummy.csv')
+        df = df[(df['b'] == 'aa') | (df['b'] == 'bb')]
         indices = ['a', 'c']
         target = 'x'
         column = 'b'
@@ -42,6 +44,7 @@ class TestPivotTransform:
 
     def test_pivot(self):
         df = pd.read_csv('./tests/data/dummy.csv')
+        df = df[(df['b'] == 'aa') | (df['b'] == 'bb')]
         indices = ['a']
         target = 'x'
         column = 'b'
@@ -72,6 +75,7 @@ class TestPivotTransform:
 
     def test_pivot_multi_indices(self):
         df = pd.read_csv('./tests/data/dummy.csv')
+        df = df[(df['b'] == 'aa') | (df['b'] == 'bb')]
         indices = ['a', 'c']
         target = 'x'
         column = 'b'
