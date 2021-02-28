@@ -32,16 +32,6 @@ class BaseGroupByTransform(BaseTransform):
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         return self.aggregate(df, self.keys, self.values, self.aggs)
 
-    def aggregate(
-        self,
-        df: pd.DataFrame,
-        keys: List[str],
-        values: List[str],
-        aggs: List[str],
-        *args, **kwargs
-    ) -> pd.DataFrame:
-        raise NotImplementedError()
-
     def _get_column_names(
         self,
         keys: List[str],
@@ -152,7 +142,7 @@ class ShiftGroupByTransform(BaseGroupByTransform):
         self,
         keys: List[str],
         values: List[str],
-        aggs: List[int],
+        shift: List[int],
         fillna: Union[None, int, str] = None,
         *args, **kwargs
     ) -> None:
@@ -187,41 +177,41 @@ class ShiftGroupByTransform(BaseGroupByTransform):
         return df_output
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        return self.aggregate(df, self.keys, self.values, self.shift)
+        return self.aggregate(df, self.keys, self.values, self.shift, self.fillna)
 
 
-class TargetEncodingGroupByTransform(BaseGroupByTransform):
+# class TargetEncodingGroupByTransform(BaseGroupByTransform):
 
-    def __init__(
-        self,
-        keys: List[str],
-        values: List[str],
-        aggs: List[str],
-        folds: List[Tuple[List[int], List[int]]],
-        *args, **kwargs
-    ) -> None:
-        super().__init__(keys, values, aggs, *args, **kwargs)
-        self.folds = folds
+#     def __init__(
+#         self,
+#         keys: List[str],
+#         values: List[str],
+#         aggs: List[str],
+#         folds: List[Tuple[List[int], List[int]]],
+#         *args, **kwargs
+#     ) -> None:
+#         super().__init__(keys, values, aggs, *args, **kwargs)
+#         self.folds = folds
 
-    def aggregate(
-        self,
-        df: pd.DataFrame,
-        keys: List[str],
-        values: List[str],
-        aggs: List[str],
-        folds: List[Tuple[List[int], List[int]]],
-        *args, **kwargs
-    ) -> pd.DataFrame:
-        columns = list(set(keys + values))
-        for i, (train_idx, valid_idx) in folds:
-            df_train = df.iloc[train_idx]
-            df_valid = df.iloc[valid_idx]
-            df_agg = df_train.loc[:, columns].groupby(keys)[values].agg(aggs).reset_index()
-        new_columns = self._get_column_names(keys, values, aggs)
-        df_output.columns = keys + new_columns
-        df_output = change_dtype(df_output, columns=new_columns)
-        self.features.append(df_output)
-        return df_output
+#     def aggregate(
+#         self,
+#         df: pd.DataFrame,
+#         keys: List[str],
+#         values: List[str],
+#         aggs: List[str],
+#         folds: List[Tuple[List[int], List[int]]],
+#         *args, **kwargs
+#     ) -> pd.DataFrame:
+#         columns = list(set(keys + values))
+#         for i, (train_idx, valid_idx) in folds:
+#             df_train = df.iloc[train_idx]
+#             df_valid = df.iloc[valid_idx]
+#             df_agg = df_train.loc[:, columns].groupby(keys)[values].agg(aggs).reset_index()
+#         new_columns = self._get_column_names(keys, values, aggs)
+#         df_output.columns = keys + new_columns
+#         df_output = change_dtype(df_output, columns=new_columns)
+#         self.features.append(df_output)
+#         return df_output
 
-    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        return self.aggregate(df, self.keys, self.values, self.aggs, self.folds)
+#     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+#         return self.aggregate(df, self.keys, self.values, self.aggs, self.folds)
