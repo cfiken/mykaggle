@@ -1,11 +1,10 @@
 from pytest import approx
-import numpy as np
 import pandas as pd
 
 from mykaggle.transform.groupby import (
     BaseGroupByTransform, GroupByTransform,
     DiffGroupByTransform, RatioGroupByTransform,
-    ShiftGroupByTransform,
+    ShiftGroupByTransform,  # TargetEncodingGroupByTransform
 )
 
 
@@ -154,3 +153,29 @@ class TestShiftGroupByTransform:
         assert (df_output[expected_columns[1]] == expected_y_s1).all()
         assert (df_output[expected_columns[2]] == expected_x_s2).all()
         assert (df_output[expected_columns[3]] == expected_y_s2).all()
+
+# class TestTargetEncodingGroupByTransform:
+
+#     def test_aggregate(self):
+#         df = pd.read_csv('./tests/data/dummy.csv')
+#         keys = ['a', 'b']
+#         values = ['x', 'y']
+#         aggs = ['mean', 'sum']
+
+#         expected_columns = [
+#             'te_mean_x_groupby_a_b', 'te_sum_x_groupby_a_b',
+#             'te_mean_y_groupby_a_b', 'te_sum_y_groupby_a_b'
+#         ]
+#         expected_mean_x_groupby_a_b_1 = (0.4 + 0.1 + 0.2) / 3
+#         expected_mean_x_groupby_a_b_2 = 0.3
+#         sum_y_groupby_a_b_1 = 0.4 + 0.1 + 0.2
+#         sum_y_groupby_a_b_2 = 0.3
+
+#         transform = TargetEncodingGroupByTransform(keys, values, aggs)
+#         df_output = transform.aggregate(df, keys, values, aggs)
+
+#         assert df_output.columns.tolist() == keys + expected_columns
+#         assert df_output.loc[0, 'mean_x_groupby_a_b'] == approx(expected_mean_x_groupby_a_b_1)
+#         assert df_output.loc[1, 'mean_x_groupby_a_b'] == approx(expected_mean_x_groupby_a_b_2)
+#         assert df_output.loc[0, 'sum_x_groupby_a_b'] == approx(sum_y_groupby_a_b_1)
+#         assert df_output.loc[1, 'sum_x_groupby_a_b'] == approx(sum_y_groupby_a_b_2)
