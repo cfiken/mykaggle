@@ -26,6 +26,7 @@ kaggle = "*"
 pyyaml = "*"
 mlflow = "*"
 python-dotenv = "^0.15.0"
+torch = "^1.7.1"
 
 
 [tool.poetry.dev-dependencies]
