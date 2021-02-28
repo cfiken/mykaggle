@@ -5,6 +5,8 @@ import contextlib
 from enum import Enum
 import json
 import tensorflow as tf
+import torch
+from torch import nn
 import numpy as np
 import mlflow
 import dotenv
@@ -162,13 +164,39 @@ class MLLogger:
         if OutputType.MLFLOW in self._output_types:
             mlflow.log_metric(name, metric, step=step)
 
-    def save_model(self, model: tf.keras.Model, filename: str = 'model', artifact_path: Optional[str] = None) -> None:
+    def save_model(
+        self,
+        model: Union[nn.Module, tf.keras.Model],
+        filename: str = 'model',
+        artifact_path: Optional[str] = None
+    ):
+        if isinstance(model, nn.Module):
+            self.save_torch_model(model, filename, artifact_path)
+        else:
+            self.save_tf_model(model, filename, artifact_path)
+
+    def save_tf_model(
+        self,
+        model: tf.keras.Model,
+        filename: str = 'model',
+        artifact_path: Optional[str] = None
+    ) -> None:
         '''
         モデルをローカルに保存しつつ、artifacts として mlflow に保存します。
         :param model: モデル
         :param filename: モデルを保存する場合につける名前
         '''
         model.save_weights(str(self._logdir / filename))
+        if OutputType.MLFLOW in self._output_types:
+            self.log_artifacts(str(self._logdir), artifact_path=artifact_path)
+
+    def save_torch_model(self, model: nn.Module, filename: str = 'model', artifact_path: Optional[str] = None) -> None:
+        '''
+        モデルをローカルに保存しつつ、artifacts として mlflow に保存します。
+        :param model: モデル
+        :param filename: モデルを保存する場合につける名前
+        '''
+        torch.save(model.state_dict(), str(self._logdir / filename))
         if OutputType.MLFLOW in self._output_types:
             self.log_artifacts(str(self._logdir), artifact_path=artifact_path)
 
