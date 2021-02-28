@@ -1,0 +1,2 @@
+class TestTorchLoss:
+    pass
