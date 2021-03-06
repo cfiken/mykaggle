@@ -20,7 +20,7 @@ class Feature(Registrable, metaclass=ABCMeta):
     def create(
         self,
         base: pd.DataFrame,
-        others: Optional[Dict[str, pd.DataFrame]] = None,
+        others: Dict[str, pd.DataFrame],
         *args, **kwargs
     ) -> pd.DataFrame:
         '''
@@ -44,7 +44,7 @@ class Feature(Registrable, metaclass=ABCMeta):
     def __call__(
         self,
         base: pd.DataFrame,
-        others: Optional[Dict[str, pd.DataFrame]] = None,
+        others: Dict[str, pd.DataFrame],
         use_cache: bool = False,
         save_cache: bool = False,
         merge: bool = False,
