@@ -45,5 +45,5 @@ def timer(
     out_str = fmt.format(elapsed)
     if logger:
         logger.info(out_str)
-    else:i
+    else:
         print(out_str)
