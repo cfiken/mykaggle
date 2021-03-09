@@ -15,7 +15,7 @@ def compute_importances(
 ) -> pd.DataFrame:
     imp_df = pd.DataFrame()
     imp_df['feature'] = columns
-    imp_df['gain'] = model.feature_importance('gain')
+    imp_df['gain'] = list(model.feature_importance('gain').values())
     imp_df['fold'] = fold + 1
     importances = pd.concat([importances, imp_df], axis=0, sort=False)
     return importances

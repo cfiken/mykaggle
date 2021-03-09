@@ -61,9 +61,12 @@ class Feature(Registrable, metaclass=ABCMeta):
         if use_cache:
             if not self._path.exists():
                 logger.info(f'Creating {self.name_prefix}_{self.name} since it has not been created yet.')
+                feature = self.create(base, others, *args, **kwargs)
             else:
                 feature = self._load()
-        feature = self.create(base, others, *args, **kwargs)
+        else:
+            feature = self.create(base, others, *args, **kwargs)
+
         if save_cache:
             self._save(feature)
         if merge:
