@@ -27,6 +27,8 @@ pyyaml = "*"
 mlflow = "*"
 python-dotenv = "^0.15.0"
 torch = "^1.7.1"
+boto3 = "^1.17.23"
+pyarrow = "^3.0.0"
 
 
 [tool.poetry.dev-dependencies]

@@ -20,7 +20,7 @@ class Feature(Registrable, metaclass=ABCMeta):
     def create(
         self,
         base: pd.DataFrame,
-        others: Optional[Dict[str, pd.DataFrame]] = None,
+        others: Dict[str, pd.DataFrame],
         *args, **kwargs
     ) -> pd.DataFrame:
         '''
@@ -44,7 +44,7 @@ class Feature(Registrable, metaclass=ABCMeta):
     def __call__(
         self,
         base: pd.DataFrame,
-        others: Optional[Dict[str, pd.DataFrame]] = None,
+        others: Dict[str, pd.DataFrame],
         use_cache: bool = False,
         save_cache: bool = False,
         merge: bool = False,
@@ -61,9 +61,12 @@ class Feature(Registrable, metaclass=ABCMeta):
         if use_cache:
             if not self._path.exists():
                 logger.info(f'Creating {self.name_prefix}_{self.name} since it has not been created yet.')
+                feature = self.create(base, others, *args, **kwargs)
             else:
                 feature = self._load()
-        feature = self.create(base, others, *args, **kwargs)
+        else:
+            feature = self.create(base, others, *args, **kwargs)
+
         if save_cache:
             self._save(feature)
         if merge:

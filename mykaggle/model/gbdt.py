@@ -110,6 +110,16 @@ class GBDT:
     def save(self, filename: str) -> None:
         self._model.save_model(filename)
 
+    def load(self, filename: str) -> None:
+        if self._is_lightgbm:
+            self._model = lgb.Booster(model_file=filename)
+        elif self._is_xgboost:
+            self._model = xgb.Booster()
+            self._model.load_model(filename)
+        elif self._is_catboost:
+            self._model = cat.CatBoost()
+            self._model.load_model(filename)
+
     def _params_as_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         gbdt_params = {}
         if self._is_lightgbm:
