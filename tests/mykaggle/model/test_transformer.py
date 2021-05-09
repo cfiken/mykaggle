@@ -26,7 +26,7 @@ class TestTransformer:
             # create mask for autoregressive decoding
             mask = 1 - np.triu(np.ones((batch_size, (t + 1), (t + 1))), k=1).astype(np.uint8)
             mask = torch.autograd.Variable(torch.from_numpy(mask))
-            y = decoder(x1, mem, x_mask=mask)
+            y = decoder(x1, mem, attn_mask=mask)
             x1 = torch.cat([x1, y[:, -1:]], dim=1)
 
         assert x1.shape == (batch_size, length, hidden_dim)
