@@ -17,18 +17,19 @@ lightgbm = "*"
 xgboost = "*"
 catboost = "*"
 tensorflow = "2.2.1"
-tensorflow-addons = "*"
-tensorflow-datasets = "*"
+# tensorflow-addons = "*"
+# tensorflow-datasets = "*"
+torch = "*"
 transformers = "*"
-# torch = {url = "https://download.pytorch.org/whl/cu101/torch-1.6.0%2Bcu101-cp38-cp38-linux_x86_64.whl"}
 fastprogress = "*"
 kaggle = "*"
 pyyaml = "*"
 mlflow = "*"
 python-dotenv = "^0.15.0"
-torch = "^1.7.1"
 boto3 = "^1.17.23"
 pyarrow = "^3.0.0"
+types-PyYAML = "^5.4.6"
+types-requests = "^2.25.6"
 
 
 [tool.poetry.dev-dependencies]

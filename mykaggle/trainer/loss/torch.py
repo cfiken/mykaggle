@@ -13,10 +13,34 @@ def get_loss_fn(
     *args, **kwargs
 ) -> nn.Module:
     if loss_name == 'ce':
+        return nn.CrossEntropyLoss(
+            reduction=kwargs['loss_reduction']
+        )
+    elif loss_name == 'custom_ce':
         return CustomCrossEntropy(
             num_classes=num_classes,
             reduction=kwargs['loss_reduction'],
             smoothing=kwargs['label_smoothing'],
+        )
+    elif loss_name == 'margin_rank':
+        return nn.MarginRankingLoss(
+            margin=kwargs['loss_rank_margin'], reduction=kwargs['loss_reduction']
+        )
+    elif loss_name == 'bce':
+        return nn.BCEWithLogitsLoss(
+            reduction=kwargs['loss_reduction']
+        )
+    elif loss_name == 'mse':
+        return nn.MSELoss(
+            reduction=kwargs['loss_reduction']
+        )
+    elif loss_name == 'mae':
+        return nn.L1Loss(
+            reduction=kwargs['loss_reduction']
+        )
+    elif loss_name == 'huber':
+        return nn.HuberLoss(
+            reduction=kwargs['loss_reduction'], delta=kwargs['loss_huber_delta']
         )
     elif loss_name == 'focal_cosine':
         return FocalCosineLoss(
