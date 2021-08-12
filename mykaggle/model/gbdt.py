@@ -29,7 +29,6 @@ class GBDT:
         '''
         self._type = ModelType(type) if isinstance(type, str) else type
         self._params = params
-        self._model = None
 
     def train(
         self,

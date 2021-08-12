@@ -162,7 +162,7 @@ class TransformerDecoderLayer(nn.Module):
         outputs = second_outputs + self.dropout3(outputs)
         return outputs
 
-    def forward_last(self, query_last, query_cache, mem, mem_mask: Optional = None):
+    def forward_last(self, query_last, query_cache, mem, mem_mask: Optional[torch.Tensor] = None):
         query_last_norm = self.norm1(query_last)
         outputs = torch.cat([query_cache, query_last_norm], 1)
         query_cache = outputs.clone()

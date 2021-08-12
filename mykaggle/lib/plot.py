@@ -1,4 +1,5 @@
 from typing import Optional, List
+from pathlib import Path
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -24,3 +25,17 @@ def plot_confusion_matrix(preds: np.ndarray, labels: np.ndarray, class_labels: O
     ax.set_ylabel('True Label')
     ax.set_aspect('equal')
     plt.tight_layout()
+
+
+def plot_regression_prediction(
+    y_true: np.ndarray, y_pred: np.ndarray, ckptdir: Path
+) -> None:
+    plt.figure(figsize=(5, 5))
+    plt.plot([-3, 2], [-3, 2], color='black')
+    plt.scatter(y_true, y_pred, alpha=0.2)
+    plt.xlim(-3, 2)
+    plt.ylim(-3, 2)
+    plt.xlabel('True')
+    plt.ylabel('Pred')
+    plt.tight_layout()
+    plt.savefig(ckptdir / 'prediction.png')
