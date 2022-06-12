@@ -27,7 +27,7 @@ from mykaggle.trainer.base import Mode
 # Settings
 #
 
-IS_DEBUG = True
+IS_DEBUG = False
 S = yaml.safe_load('''
 name: 'sample_nlp_bert_binary_classification'
 competition: sample
@@ -48,9 +48,9 @@ training:
     train_only_fold:
     learning_rate: 0.00003
     num_epochs: 2
-    batch_size: 8
+    batch_size: 16
     test_batch_size: 16
-    num_accumulations: 4
+    num_accumulations: 2
     num_workers: 4
     scheduler: LinearDecayWithWarmUp
     batch_scheduler: true
@@ -108,6 +108,9 @@ if 'fold' not in DF_TRAIN.columns or ST['do_fold']:
     splits = list(splitter.split(DF_TRAIN, DF_TRAIN[ST['target_column']]))
     for i, (_, valid_idx) in enumerate(splits):
         DF_TRAIN.loc[valid_idx, 'fold'] = i
+
+LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
+
 
 #
 # Dataset and Dataloader
@@ -418,7 +421,7 @@ class Trainer:
         if isinstance(labels, (tuple, list)):
             labels, weights = labels
             weights = weights.to(self.device)
-        labels = labels.to(self.device)
+        labels = labels.to(self.device).float()
         with autocast(enabled=st['use_amp']):
             outputs_tuple1 = model(inputs)
             if isinstance(outputs_tuple1, (tuple, list)):
@@ -474,7 +477,7 @@ class Trainer:
             inputs, labels = batch
             for key in inputs.keys():
                 inputs[key] = inputs[key].to(self.device).long()
-            labels = labels.to(self.device)
+            labels = labels.to(self.device).float()
 
             with autocast(enabled=self.st['use_amp']):
                 with torch.no_grad():
@@ -498,12 +501,14 @@ class Trainer:
 def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
-    tokenizer = AutoTokenizer.from_pretrained(SM['model_name'])
+    ml_logger.log_params(st)
+    ml_logger.log_params(sm)
+    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
     oof_preds = np.zeros((df.shape[0]))
 
     for fold in range(st['num_folds']):
-        df_train = df[df['fold'] != i]
-        df_valid = df[df['fold'] == i]
+        df_train = df[df['fold'] != fold]
+        df_valid = df[df['fold'] == fold]
         train_ds = MyDataset(s, df_train, tokenizer, Mode.TRAIN)
         valid_ds = MyDataset(s, df_valid, tokenizer, Mode.VALID)
         train_dataloader = get_dataloader(train_ds, st['batch_size'], st['num_workers'], Mode.TRAIN)
@@ -535,7 +540,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         if ST.get('use_only_fold', False):
             break
 
-    score = roc_auc_score(df['target'].values, oof_preds)
+    score = roc_auc_score(df[st['target_column']].values, oof_preds)
     ml_logger.log_metric('auc', score)
     pickle.dump(oof_preds, open(CKPTDIR / 'oof_preds.pkl', 'wb'))
     LOGGER.info(f'training finished. Metric: {score:.3f}')
@@ -579,7 +584,7 @@ def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.Dat
 def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
-    tokenizer = AutoTokenizer.from_pretrained(CKPTDIR)
+    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
     test_preds = np.zeros((len(df)))
     for fold in range(st['num_folds']):
         LOGGER.info(f'inference fold {fold} started.')

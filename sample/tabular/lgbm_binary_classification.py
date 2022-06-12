@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import dotenv
 
-from sklearn.metrics import f1_score
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 
 from mykaggle.model.gbdt import GBDT
@@ -48,7 +48,7 @@ model:
     objective: binary
     learning_rate: 0.1
     max_depth: -1
-    num_leaves: 31
+    num_leaves: 10
     colsample_bytree: .7
     metric: 'auc' # 'None'
     num_boost_round: 10000
@@ -208,20 +208,20 @@ def train(
         with timer(prefix=f'train fold={fold + 1} '):
             model = GBDT('lightgbm', sm)
             model.train(x_train, y_train, x_valid, y_valid)
-        pred = model.predict(x_valid)
-        oof_preds[df_valid.index] = pred
+        val_preds = model.predict(x_valid)
+        oof_preds[df_valid.index] = val_preds
         test_pred = model.predict(df_f_test)
         test_preds += test_pred / st['num_folds']
         models.append(model)
         importances = compute_importances(importances, x_train.columns, models[fold], fold=fold)
-        fold_score = f1_score(y_valid, pred > 0.5, average='binary')
+        fold_score = roc_auc_score(y_valid, val_preds)
         logger.log_metric(f'f1_fold{fold}', fold_score)
         LOGGER.info(f'Fold {fold} Macro-F1: {fold_score:.4f}')
         model.save(str(CKPTDIR / f'model_{fold}.txt'))
         logger.log_artifact(str(CKPTDIR / f'model_{fold}.txt'))
 
-    score = f1_score(y, oof_preds > 0.5, average='binary')
-    logger.log_metric('f1', score)
+    score = roc_auc_score(y, oof_preds)
+    logger.log_metric('auc', score)
     LOGGER.info('FINISHED; whole score: {:.4f}'.format(score))
     save_importances(importances, CKPTDIR)
     plot_confusion_matrix(oof_preds > 0.5, y, CKPTDIR)

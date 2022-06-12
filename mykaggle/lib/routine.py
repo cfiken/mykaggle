@@ -14,8 +14,12 @@ import yaml
 import json
 import logging
 import numpy as np
-import tensorflow as tf
 import torch
+try:
+    import tensorflow as tf
+except ImportError:
+    from unittest.mock import MagicMock
+    tf = MagicMock()
 
 from mykaggle.lib.ml_logger import MLLogger
 
