@@ -11,7 +11,7 @@ import numpy as np
 import mlflow
 import dotenv
 
-from mykaggle.util.slack import Slack
+from mykaggle.lib.slack import Slack
 
 
 class OutputType(Enum):

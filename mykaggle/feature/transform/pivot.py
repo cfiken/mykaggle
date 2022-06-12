@@ -1,7 +1,7 @@
 from typing import Any, Union, List, Optional
 import pandas as pd
 
-from mykaggle.transform.base import BaseTransform
+from mykaggle.feature.transform.base import BaseTransform
 
 
 class PivotTransform(BaseTransform):

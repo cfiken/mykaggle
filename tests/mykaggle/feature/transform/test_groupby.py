@@ -1,7 +1,7 @@
 from pytest import approx
 import pandas as pd
 
-from mykaggle.transform.groupby import (
+from mykaggle.feature.transform.groupby import (
     BaseGroupByTransform, GroupByTransform,
     DiffGroupByTransform, RatioGroupByTransform,
     ShiftGroupByTransform,  # TargetEncodingGroupByTransform

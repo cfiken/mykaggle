@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 from mykaggle.lib.registrable import Registrable
-from mykaggle.util.logger import get_logger
+from mykaggle.lib.routine import get_logger
 
 FEATURE_DIR = Path('../data/feature/')
 logger = get_logger(__name__)

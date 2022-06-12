@@ -1,7 +1,7 @@
 from pathlib import Path
 import pytest
 
-from mykaggle.util.config import load_config
+from mykaggle.lib.routine import load_config
 
 
 def test_config_loader_yaml():
