@@ -30,7 +30,13 @@ class Feature(Registrable, metaclass=ABCMeta):
         '''
         pass
 
-    def __init__(self, name: str, train: bool = True, category: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        train: bool = True,
+        category: Optional[str] = None,
+        base_column: Optional[str] = None
+    ) -> None:
         '''
         :params name: 特徴の名前 e.g.) gender, age
         :params train: train 用の特徴であれば True, test 用であれば False
@@ -40,6 +46,7 @@ class Feature(Registrable, metaclass=ABCMeta):
         self.train = train
         self.name_prefix = 'train' if train else 'test'
         self.category = category
+        self.base_column = base_column or 'id'
 
     def __call__(
         self,
@@ -100,4 +107,4 @@ class Feature(Registrable, metaclass=ABCMeta):
 
     @property
     def _merge_on(self) -> str:
-        return 'id'
+        return self.base_column

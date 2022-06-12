@@ -32,9 +32,9 @@ class GBDT:
 
     def train(
         self,
-        x_train: Union[pd.DataFrame, np.ndarray],
+        x_train: pd.DataFrame,
         y_train: Union[pd.DataFrame, np.ndarray],
-        x_valid: Union[pd.DataFrame, np.ndarray],
+        x_valid: pd.DataFrame,
         y_valid: Union[pd.DataFrame, np.ndarray],
         cat_features: Optional[List[Union[str, int]]] = None,
         feature_names: Optional[List[str]] = None
@@ -82,7 +82,7 @@ class GBDT:
         if self._is_lightgbm:
             pred = self._model.predict(inputs)
         elif self._is_xgboost:
-            feature_names = feature_names or inputs.columns
+            feature_names = feature_names or (inputs.columns if isinstance(inputs, pd.DataFrame) else None)
             inputs = xgb.DMatrix(inputs)
             pred = self._model.predict(inputs, ntree_limit=self._model.best_ntree_limit)
         elif self._is_catboost:

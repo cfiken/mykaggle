@@ -4,12 +4,16 @@ from pathlib import Path
 import contextlib
 from enum import Enum
 import json
-import tensorflow as tf
 import torch
 from torch import nn
 import numpy as np
 import mlflow
 import dotenv
+try:
+    import tensorflow as tf
+except ImportError:
+    from unittest.mock import MagicMock
+    tf = MagicMock()
 
 from mykaggle.lib.slack import Slack
 
@@ -141,7 +145,7 @@ class MLLogger:
         if OutputType.STD in self._output_types:
             print(f'{name}: {value}')
 
-    def log_metrics(self, metrics: Dict[str, Union[np.float32, np.int32]], step: int = 0) -> None:
+    def log_metrics(self, metrics: Dict[str, float], step: int = 0) -> None:
         '''
         計算した複数の metric のログを取りたいときに使用します。
         学習後などに validation / test set などで計算した metric を保存することを想定しています。
@@ -152,7 +156,7 @@ class MLLogger:
         if OutputType.MLFLOW in self._output_types:
             mlflow.log_metrics(metrics, step=step)
 
-    def log_metric(self, name: str, metric: Union[np.float32, np.int32], step: int = 0) -> None:
+    def log_metric(self, name: str, metric: float, step: int = 0) -> None:
         '''
         計算した単体の metric のログを取りたいときに使用します。
         学習後などに validation / test set などで計算した metric を保存することを想定しています。

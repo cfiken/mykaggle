@@ -51,6 +51,6 @@ class PositionEncode2D(nn.Module):
 
 def decoder_attention_mask(input_ids: torch.Tensor) -> torch.Tensor:
     batch_size, length = input_ids.shape
-    mask = 1 - np.triu(np.ones((length, length)), k=1).astype('uint8')
-    mask = torch.autograd.Variable(torch.from_numpy(mask)).type_as(input_ids)
+    mask_np = 1 - np.triu(np.ones((length, length)), k=1).astype('uint8')
+    mask = torch.autograd.Variable(torch.from_numpy(mask_np)).type_as(input_ids)
     return mask.type(torch.DoubleTensor)
