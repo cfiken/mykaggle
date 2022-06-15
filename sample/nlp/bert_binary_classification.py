@@ -29,7 +29,7 @@ from mykaggle.trainer.base import Mode
 
 IS_DEBUG = False
 S = yaml.safe_load('''
-name: 'sample_nlp_bert_binary_classification'
+name: 'nlp_bert_binary_classification'
 competition: sample
 do_training: true
 do_inference: true
@@ -103,7 +103,9 @@ if IS_DEBUG:
 DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
 DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 
-if 'fold' not in DF_TRAIN.columns or ST['do_fold']:
+FOLD_COLUMN = 'fold'
+
+if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_fold']:
     from mykaggle.trainer.cv_strategy import CVStrategy
     cv = CVStrategy.create(ST['cv'], ST['num_folds'])
     DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column=ST['target_column'])
@@ -505,8 +507,8 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     oof_preds = np.zeros((df.shape[0]))
 
     for fold in range(st['num_folds']):
-        df_train = df[df['fold'] != fold]
-        df_valid = df[df['fold'] == fold]
+        df_train = df[df[FOLD_COLUMN] != fold]
+        df_valid = df[df[FOLD_COLUMN] == fold]
         train_ds = MyDataset(s, df_train, tokenizer, Mode.TRAIN)
         valid_ds = MyDataset(s, df_valid, tokenizer, Mode.VALID)
         train_dataloader = get_dataloader(train_ds, st['batch_size'], st['num_workers'], Mode.TRAIN)

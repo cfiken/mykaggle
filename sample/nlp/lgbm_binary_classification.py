@@ -27,7 +27,7 @@ from mykaggle.lib.ml_logger import MLLogger
 
 IS_DEBUG = False
 S = yaml.safe_load('''
-name: 'tabular_lgbm_binary_classification'
+name: 'nlp_lgbm_binary_classification'
 competition: sample
 mode: training
 seed: 1019

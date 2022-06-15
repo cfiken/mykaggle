@@ -28,7 +28,7 @@ from mykaggle.trainer.base import Mode
 
 IS_DEBUG = True
 S = yaml.safe_load('''
-name: 'sample_nlp_bert_multiclass_classification'
+name: 'nlp_bert_multiclass_classification'
 competition: sample
 do_training: true
 do_inference: true
@@ -101,12 +101,13 @@ if IS_DEBUG:
 DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
 DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 
-if 'fold' not in DF_TRAIN.columns or ST['do_fold']:
-    from sklearn.model_selection import StratifiedKFold
-    splitter = StratifiedKFold(ST['num_folds'])
-    splits = list(splitter.split(DF_TRAIN, DF_TRAIN[ST['target_column']]))
-    for i, (_, valid_idx) in enumerate(splits):
-        DF_TRAIN.loc[valid_idx, 'fold'] = i
+FOLD_COLUMN = 'fold'
+
+if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_fold']:
+    from mykaggle.trainer.cv_strategy import CVStrategy
+    cv = CVStrategy.create(ST['cv'], ST['num_folds'])
+    DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column=ST['target_column'])
+LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
 
 #
 # Dataset and Dataloader
@@ -499,8 +500,8 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     oof_preds = np.zeros((df.shape[0], SM['num_classes']))
 
     for fold in range(ST['num_folds']):
-        df_train = df[df['fold'] != i]
-        df_valid = df[df['fold'] == i]
+        df_train = df[df[FOLD_COLUMN] != fold]
+        df_valid = df[df[FOLD_COLUMN] == fold]
         train_ds = MyDataset(S, df_train, tokenizer, Mode.TRAIN)
         valid_ds = MyDataset(S, df_valid, tokenizer, Mode.VALID)
         train_dataloader = get_dataloader(train_ds, ST['batch_size'], ST['num_workers'], Mode.TRAIN)
