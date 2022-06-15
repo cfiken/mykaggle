@@ -19,7 +19,7 @@ class CVStrategy:
     def __init__(self, num_splits: int) -> None:
         self.num_splits = num_splits
 
-    def preprocess(self, df: pd.DataFrame, *args, **kwargs) -> None:
+    def preprocess(self, df: pd.DataFrame, *args, **kwargs) -> pd.DataFrame:
         return df
 
     def split(
@@ -65,7 +65,7 @@ class CVStrategy:
         各ストラテジーの分割を元の DataFrame に 'fold' カラムとして入れる関数
         '''
         df = self.preprocess(df)
-        splits = self._split(df, y, group, *args, **kwargs)
+        splits = self._split(df, y, y_column, group, group_column, **kwargs)
         for i, (_, valid_idx) in enumerate(splits):
             df.loc[valid_idx, kwargs.get('fold_column', 'fold')] = i
         return df

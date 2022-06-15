@@ -79,6 +79,8 @@ if not CKPTDIR.exists():
 
 
 DF_TRAIN = pd.read_csv(DATADIR / ST['train_file'])
+if IS_DEBUG:
+    DF_TRAIN = DF_TRAIN.iloc[:1000]
 DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
 DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 
@@ -90,16 +92,9 @@ FOLD_COLUMN = 'fold'
 if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_fold']:
     from mykaggle.trainer.cv_strategy import CVStrategy
     cv = CVStrategy.create(ST['cv'], ST['num_folds'])
-    splits = cv.split(DF_TRAIN, DF_TRAIN[TARGET_COLUMN])
-    for i, (_, valid_idx) in enumerate(splits):
-        DF_TRAIN.loc[valid_idx, FOLD_COLUMN] = i
+    DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column=TARGET_COLUMN)
 
-
-# C_MAP = DF_CATEGORY['class_name'].to_dict()
-# C_INV_MAP = {v: k for k, v in C_MAP.items()}
-
-if IS_DEBUG:
-    DF_TRAIN = DF_TRAIN.iloc[:100]
+LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
 
 
 #
