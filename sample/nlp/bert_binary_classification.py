@@ -45,12 +45,13 @@ training:
     target_column: target
     num_folds: 5
     do_folds: true
+    cv: stratified
     train_only_fold:
     learning_rate: 0.00003
     num_epochs: 2
-    batch_size: 16
+    batch_size: 8
     test_batch_size: 16
-    num_accumulations: 2
+    num_accumulations: 4
     num_workers: 4
     scheduler: LinearDecayWithWarmUp
     batch_scheduler: true
@@ -58,7 +59,7 @@ training:
     warmup_epochs: 0.2
     logger_verbose_step: 10
     ckpt_callback_verbose: true
-    val_check_interval: 100
+    val_check_interval: 10000
     optimizer: AdamW
     weight_decay: 0.0
     loss: ce
@@ -103,12 +104,9 @@ DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
 DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 
 if 'fold' not in DF_TRAIN.columns or ST['do_fold']:
-    from sklearn.model_selection import StratifiedKFold
-    splitter = StratifiedKFold(ST['num_folds'])
-    splits = list(splitter.split(DF_TRAIN, DF_TRAIN[ST['target_column']]))
-    for i, (_, valid_idx) in enumerate(splits):
-        DF_TRAIN.loc[valid_idx, 'fold'] = i
-
+    from mykaggle.trainer.cv_strategy import CVStrategy
+    cv = CVStrategy.create(ST['cv'], ST['num_folds'])
+    DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column=ST['target_column'])
 LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
 
 

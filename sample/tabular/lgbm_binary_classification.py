@@ -9,7 +9,6 @@ import numpy as np
 import dotenv
 
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold
 
 from mykaggle.model.gbdt import GBDT
 from mykaggle.feature.feature_factory import FeatureFactory
@@ -38,6 +37,7 @@ training:
     train_file: train.csv
     test_file: test.csv
     do_cv: true
+    cv: stratified
     num_folds: 5
 feature:
     features:
@@ -87,18 +87,12 @@ TARGET_COLUMN = 'Survived'
 FOLD_COLUMN = 'fold'
 
 
-def split_cv(df: pd.DataFrame, num_splits: int) -> pd.DataFrame:
-    df[FOLD_COLUMN] = 0
-    splitter = StratifiedKFold(num_splits)
-    splits = splitter.split(df, y=df[TARGET_COLUMN])
+if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_fold']:
+    from mykaggle.trainer.cv_strategy import CVStrategy
+    cv = CVStrategy.create(ST['cv'], ST['num_folds'])
+    splits = cv.split(DF_TRAIN, DF_TRAIN[TARGET_COLUMN])
     for i, (_, valid_idx) in enumerate(splits):
-        df.loc[valid_idx, FOLD_COLUMN] = i
-    return df
-
-
-if ST['do_cv'] or FOLD_COLUMN not in DF_TRAIN.columns:
-    DF_TRAIN = split_cv(DF_TRAIN, ST['num_folds'])
-    print(DF_TRAIN.columns)
+        DF_TRAIN.loc[valid_idx, FOLD_COLUMN] = i
 
 
 # C_MAP = DF_CATEGORY['class_name'].to_dict()
