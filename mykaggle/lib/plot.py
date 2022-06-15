@@ -6,7 +6,9 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 
 
-def plot_confusion_matrix(preds: np.ndarray, labels: np.ndarray, class_labels: Optional[List[str]] = None):
+def plot_confusion_matrix(
+    preds: np.ndarray, labels: np.ndarray, ckptdir: Path, class_labels: Optional[List[str]] = None
+) -> None:
     '''
     Confusion Matrix をプロットする
     Args:
@@ -16,8 +18,8 @@ def plot_confusion_matrix(preds: np.ndarray, labels: np.ndarray, class_labels: O
     '''
     if class_labels is None:
         class_labels = np.unique(labels)
-    cm = confusion_matrix(labels, preds, class_labels)
-    cm = cm.astype(np.float) / cm.sum(axis=1)[:, np.newaxis]
+    cm = confusion_matrix(labels, preds, labels=class_labels)
+    cm = cm.astype(np.float32) / cm.sum(axis=1)[:, np.newaxis]
     annot = np.around(cm, 2)
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(cm, xticklabels=class_labels, yticklabels=class_labels, cmap='Blues', annot=annot, linewidths=0.5)
@@ -25,6 +27,7 @@ def plot_confusion_matrix(preds: np.ndarray, labels: np.ndarray, class_labels: O
     ax.set_ylabel('True Label')
     ax.set_aspect('equal')
     plt.tight_layout()
+    plt.savefig(ckptdir / 'confusion_matrix.png')
 
 
 def plot_regression_prediction(
@@ -37,5 +40,15 @@ def plot_regression_prediction(
     plt.ylim(-3, 2)
     plt.xlabel('True')
     plt.ylabel('Pred')
+    plt.tight_layout()
+    plt.savefig(ckptdir / 'prediction.png')
+
+
+def plot_regression_distribution(
+    y_true: np.ndarray, y_pred: np.ndarray, ckptdir: Path
+) -> None:
+    plt.figure(figsize=(5, 5))
+    sns.distplot(y_true, color='red', label='True')
+    sns.distplot(y_pred, color='blue', label='Pred')
     plt.tight_layout()
     plt.savefig(ckptdir / 'prediction.png')

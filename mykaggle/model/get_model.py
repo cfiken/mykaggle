@@ -28,7 +28,7 @@ def get_model(
             settings['model'], mst['model_name'], pretrained, ckptdir=settings['ckptdir']
         )
     if fold == 0:
-        LOGGER.info(hg_model.config)
+        LOGGER.info(hg_model.config)  # type: ignore
     model_type = settings['model'].get('model_type', 'cls_base')
     model: nn.Module
     if model_type == 'base':

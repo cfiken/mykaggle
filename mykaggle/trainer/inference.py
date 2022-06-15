@@ -175,7 +175,7 @@ def ensemble_inference_fold(
 
 def train_ensemble_weights(
     ensemble_type: str,
-    targets: np.array,
+    targets: np.ndarray,
     preds: np.ndarray,
     metric: Callable,
     lbs: Optional[np.ndarray] = None

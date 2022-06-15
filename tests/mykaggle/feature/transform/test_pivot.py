@@ -2,7 +2,7 @@ from pytest import approx
 import pandas as pd
 import numpy as np
 
-from mykaggle.transform.pivot import PivotTransform
+from mykaggle.feature.transform.pivot import PivotTransform
 
 
 class TestPivotTransform:
