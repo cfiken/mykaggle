@@ -25,7 +25,7 @@ from mykaggle.lib.ml_logger import MLLogger
 #
 
 
-IS_DEBUG = False
+IS_DEBUG = True
 S = yaml.safe_load('''
 name: 'nlp_lgbm_binary_classification'
 competition: sample
@@ -87,7 +87,6 @@ DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 BASE_COLUMN = 'PassengerId'
 TARGET_COLUMN = 'Survived'
 FOLD_COLUMN = 'fold'
-
 
 if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_fold']:
     from mykaggle.trainer.cv_strategy import CVStrategy
