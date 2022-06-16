@@ -1,6 +1,5 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional
 from pathlib import Path
-from sklearn.preprocessing import LabelEncoder
 import yaml
 import pickle
 
@@ -9,8 +8,11 @@ import numpy as np
 import dotenv
 
 from sklearn.metrics import roc_auc_score
+from sklearn.feature_extraction.text import TfidfVectorizer
+import category_encoders as ce
 
 from mykaggle.model.gbdt import GBDT
+from mykaggle.trainer.cv_strategy import Stratified
 from mykaggle.feature.feature_factory import FeatureFactory
 from mykaggle.feature.base import Feature
 # from mykaggle.trainer.metric.macro_f1 import macro_f1_lgb
@@ -25,7 +27,7 @@ from mykaggle.lib.ml_logger import MLLogger
 #
 
 
-IS_DEBUG = True
+IS_DEBUG = False
 S = yaml.safe_load('''
 name: 'nlp_lgbm_binary_classification'
 competition: sample
@@ -41,8 +43,16 @@ training:
     num_folds: 5
 feature:
     features:
-        - simple
+        - tfidf_code
+        - tfidf_line_c
+        - ext_te
     params:
+        tfidf_code:
+            ngram_range: [1, 2]
+            max_features: 5000
+        tfidf_line_c:
+            ngram_range: [1, 2]
+            max_features: 5000
 model:
     model_type: lightgbm
     objective: binary
@@ -52,7 +62,7 @@ model:
     colsample_bytree: .7
     metric: 'auc' # 'None'
     num_boost_round: 10000
-    early_stopping_rounds: 1000
+    early_stopping_rounds: 100
     verbose_eval: 100
     num_classes: 1
 ensemble:
@@ -67,7 +77,7 @@ SM = S['model']
 
 fix_seed()
 LOGGER = get_logger(__name__)
-DATADIR = Path('./data/titanic/')
+DATADIR = Path('./data/dubai/')
 CKPTDIR = Path('./ckpt/') / S['name']
 if not CKPTDIR.exists():
     CKPTDIR.mkdir()
@@ -84,14 +94,20 @@ if IS_DEBUG:
 DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
 DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 
-BASE_COLUMN = 'PassengerId'
-TARGET_COLUMN = 'Survived'
+BASE_COLUMN = 'id'
+TARGET_COLUMN = 'label'
 FOLD_COLUMN = 'fold'
 
+
+class MyStratified(Stratified):
+    def preprocess(self, df: pd.DataFrame, *args, **kwargs) -> pd.DataFrame:
+        df['ext_label'] = df['file_extension'] + "_" + df['label'].astype('str')
+        return df
+
+
 if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_fold']:
-    from mykaggle.trainer.cv_strategy import CVStrategy
-    cv = CVStrategy.create(ST['cv'], ST['num_folds'])
-    DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column=TARGET_COLUMN)
+    cv = MyStratified(ST['num_folds'])
+    DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column='ext_label')
 
 LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
 
@@ -100,14 +116,30 @@ LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
 # Feature
 #
 
-@Feature.register('simple')
-class SimpleEncoding(Feature):
+
+def preprocess(df_train: pd.DataFrame, df_test: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    df_train[['A', 'B', 'C', 'D', 'E']] = df_train['code'].str.split('\n', expand=True)
+    df_test[['A', 'B', 'C', 'D', 'E']] = df_test['code'].str.split('\n', expand=True)
+    return df_train, df_test
+
+
+class TfidfEncoding(Feature):
     '''
-    基本的な特徴のエンコーディング
+    テキストの TF-IDF エンコーディング
     '''
 
-    def __init__(self, train: bool = True) -> None:
-        super().__init__(name='simple', train=train, base_column=BASE_COLUMN)
+    def __init__(
+        self,
+        name: str,
+        input_column: str,
+        ngram_range: Tuple[int],
+        max_features: Optional[int] = None,
+        train: bool = True
+    ) -> None:
+        super().__init__(name=name, train=train, base_column=BASE_COLUMN)
+        self.input_column = input_column
+        self.ngram_range = ngram_range
+        self.max_features = max_features
 
     def create(
         self,
@@ -122,18 +154,89 @@ class SimpleEncoding(Feature):
         else:
             df_whole = pd.concat([df_another, df_main])
 
-        le = LabelEncoder()
-        le.fit(df_whole['Sex'])
-        df_main['le_Sex'] = le.transform(df_main['Sex'])
+        processor = TfidfVectorizer(ngram_range=self.ngram_range, max_features=self.max_features)
+        tfidf = processor.fit_transform(df_whole[self.input_column])
+        column_names = [f'tfidf_{self.input_column}_{str(i)}' for i in range(tfidf.shape[1])]
+        if self.train:
+            df_main.loc[:, column_names] = tfidf[:len(df_main), :].toarray()
+        else:
+            df_main.loc[:, column_names] = tfidf[len(df_another):, :].toarray()
 
-        target_columns = ['Pclass', 'le_Sex', 'Age', 'SibSp', 'Parch', 'Fare']
+        return df_main.loc[:, column_names]
 
-        return df_main.loc[:, target_columns]
+
+@Feature.register('tfidf_code')
+class TfidfCodeEncoding(TfidfEncoding):
+    def __init__(
+        self,
+        ngram_range: Tuple[int],
+        max_features: Optional[int] = None,
+        train: bool = True
+    ) -> None:
+        super().__init__(
+            name='tfidf_code',
+            input_column='code',
+            ngram_range=ngram_range,
+            max_features=max_features,
+            train=train
+        )
+
+
+@Feature.register('tfidf_line_c')
+class TfidfLineCEncoding(TfidfEncoding):
+    def __init__(
+        self,
+        ngram_range: Tuple[int],
+        max_features: Optional[int] = None,
+        train: bool = True
+    ) -> None:
+        super().__init__(
+            name='tfidf_line_c',
+            input_column='C',
+            ngram_range=ngram_range,
+            max_features=max_features,
+            train=train
+        )
+
+
+@Feature.register('ext_te')
+class ExtTargetEncoding(Feature):
+    '''
+    file_extention による target encoding
+    '''
+
+    def __init__(
+        self,
+        train: bool = True
+    ) -> None:
+        super().__init__(name='ext_te', train=train, base_column=BASE_COLUMN)
+
+    def create(
+        self,
+        base: pd.DataFrame,
+        others: Dict[str, pd.DataFrame],
+        *args, **kwargs
+    ) -> pd.DataFrame:
+        df_main = others['main'].copy()
+        df_another = others['another'].copy()
+
+        col = 'file_extension'
+        te = ce.TargetEncoder(cols=col)
+        if self.train:
+            te_train = te.fit_transform(df_main[col], df_main['label'])
+            df_main['te_ext'] = te_train
+        else:
+            te_train = te.fit_transform(df_another[col], df_another['label'])
+            te_test = te.transform(df_main[col])
+            df_main['te_ext'] = te_test
+
+        return df_main.loc[:, ['te_ext']]
 
 
 def get_features(
     settings: Dict[str, Any], df_train: pd.DataFrame, df_test: pd.DataFrame,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    df_train, df_test = preprocess(df_train, df_test)
     df_base_train = df_train[[BASE_COLUMN, TARGET_COLUMN, FOLD_COLUMN]].copy()
     df_base_test = df_test[[BASE_COLUMN]].copy()
     df_others_train = {
@@ -146,7 +249,9 @@ def get_features(
     }
 
     feature_names = settings['feature']['features']
+    LOGGER.info(f'Using features: {feature_names}')
     feature_params = settings['feature']['params'] or {}
+    LOGGER.info(f'With features params: {feature_params}')
     df_f_train = FeatureFactory.run(
         feature_names, feature_params,
         df_base_train.copy(), df_others_train, train=True, use_cache=False, save_cache=False
