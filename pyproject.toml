@@ -30,6 +30,7 @@ boto3 = "^1.17.23"
 pyarrow = "^3.0.0"
 types-PyYAML = "^5.4.6"
 types-requests = "^2.25.6"
+category-encoders = "^2.5.0"
 
 
 [tool.poetry.dev-dependencies]
