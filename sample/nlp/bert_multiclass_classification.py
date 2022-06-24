@@ -43,7 +43,7 @@ training:
     input_column: question_text
     target_column: target
     num_folds: 5
-    do_folds: true
+    do_cv: true
     train_only_fold:
     learning_rate: 0.00003
     num_epochs: 2
@@ -103,7 +103,7 @@ DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 
 FOLD_COLUMN = 'fold'
 
-if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_fold']:
+if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_cv']:
     from mykaggle.trainer.cv_strategy import CVStrategy
     cv = CVStrategy.create(ST['cv'], ST['num_folds'])
     DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column=ST['target_column'])

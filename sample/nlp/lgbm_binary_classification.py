@@ -105,7 +105,7 @@ class MyStratified(Stratified):
         return df
 
 
-if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_fold']:
+if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_cv']:
     cv = MyStratified(ST['num_folds'])
     DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column='ext_label')
 
