@@ -4,7 +4,7 @@ version: 2.1
 jobs:
   test:
     docker:
-      - image: circleci/python:3.8.6
+      - image: cfiken/mykaggle:cu113
 
     working_directory: ~/repo
 
