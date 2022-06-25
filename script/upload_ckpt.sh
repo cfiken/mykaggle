@@ -4,7 +4,8 @@
 # run this in repository root: ./script/upload_data.sh "version message"
 
 if [ $# -ne 1 ]; then
-  echo "message is needed as args"
+  echo "Message is needed as args like:"
+  echo "./script/upload_data.sh \"version message\""
   exit 1
 fi
 
