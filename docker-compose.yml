@@ -3,13 +3,14 @@
 version: "3.7"
 services:
   mykaggle:
-    image: mykaggle
-    command: ["poetry", "run", "jupyter", "lab", "--port", "8890"]
+    image: cfiken/mykaggle:cu113
+    command: ["poetry", "run", "jupyter", "lab", "--port", "8888"]
     container_name: mykaggle
+    runtime: nvidia
     restart: "no"
     ports:
-      - target: 8890
-        published: 8890
+      - target: 8888
+        published: 8888
         protocol: tcp
         mode: host
     volumes:
@@ -19,7 +20,14 @@ services:
       - type: bind
         source: $SSH_AUTH_SOCK
         target: /ssh-agent
+      - type: bind
+        source: ~/.aws
+        target: /home/ubuntu/.aws
     environment:
       SSH_AUTH_SOCK: /ssh-agent
+      MLFLOW_TRACKING_URI: $MLFLOW_TRACKING_URI
+      AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+      AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+      MY_SLACK_WEBHOOK_URL: $MY_SLACK_WEBHOOK_URL
     tty: true
     stdin_open: true
