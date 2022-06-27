@@ -4,6 +4,7 @@ log
 ckpt
 mlruns
 catboost_info
+jupyter_notebook_config.py
 
 # my ignore list: file
 submission.csv

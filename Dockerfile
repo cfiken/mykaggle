@@ -46,6 +46,7 @@ RUN apt-get update && apt-get install -y \
     libreadline-dev \
     libsqlite3-dev \
     libssl-dev \
+    libgl1-mesa-dev \
     pkg-config \
     zlib1g-dev \
   && apt-get clean \
