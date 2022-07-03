@@ -5,7 +5,7 @@ description = ""
 authors = ["cfiken <cfiken@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = ">=3.8.6, <4.0.0"
+python = "=3.10.4"
 jupyter = "*"
 jupyterlab = "*"
 numpy = "*"
@@ -26,21 +26,22 @@ pyyaml = "*"
 mlflow = "*"
 python-dotenv = "^0.15.0"
 boto3 = "^1.17.23"
-pyarrow = "^3.0.0"
 types-PyYAML = "^5.4.6"
 types-requests = "^2.25.6"
 category-encoders = "^2.5.0"
 #torch = {url = "https://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp38-cp38-linux_x86_64.whl"}
-torch = { version = "=1.11.0+cu113", source = "pytorch-cu113" }
-torchvision = { version = "=0.12.0+cu113", source = "pytorch-cu113" }
+#torch = { version = "=1.11.0+cu113", source = "pytorch-cu113" }
+#torchvision = { version = "=0.12.0+cu113", source = "pytorch-cu113" }
 protobuf = "^3.20.0"
 opencv-python = "^4.6.0.66"
 albumentations = "^1.2.0"
 
-[[tool.poetry.source]]
-name = "pytorch-cu113"
-url = "https://download.pytorch.org/whl/cu113/"
-secondary = true
+# [[tool.poetry.source]]
+# name = "pytorch-cu113"
+# url = "https://download.pytorch.org/whl/cu113/"
+# secondary = true
+pyarrow = "^8.0.0"
+datasets = "^2.3.2"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"

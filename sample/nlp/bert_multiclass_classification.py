@@ -63,7 +63,7 @@ training:
     loss: ce
     loss_reduction: mean
 model:
-    model_name: microsoft/deberta-base
+    model_name: microsoft/deberta-v3-base
     model_type: custom_head
     use_pretrained: true
     num_classes: 2
@@ -97,7 +97,7 @@ if not CKPTDIR.exists():
 
 DF_TRAIN = pd.read_csv(DATADIR / ST['train_file'])
 if IS_DEBUG:
-    DF_TRAIN = DF_TRAIN.iloc[:10000]
+    DF_TRAIN = DF_TRAIN.iloc[:1000]
 DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
 DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 
