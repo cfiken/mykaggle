@@ -16,7 +16,7 @@ from mykaggle.feature.base import Feature
 # from mykaggle.trainer.metric.macro_f1 import macro_f1_lgb
 from mykaggle.lib.lgbm_util import compute_importances, save_importances
 from mykaggle.lib.plot import plot_confusion_matrix
-from mykaggle.lib.routine import timer, fix_seed, get_logger, save_config
+from mykaggle.lib.routine import timer, fix_seed, get_logger
 from mykaggle.lib.ml_logger import MLLogger
 
 
@@ -222,7 +222,7 @@ def train(
 def do_training(settings: Dict[str, Any], df_train: pd.DataFrame, df_test: pd.DataFrame):
     ml_logger = MLLogger('cfiken', CKPTDIR)
     with ml_logger.start(experiment_name=settings['competition'], run_name=settings['name']):
-        save_config(settings, CKPTDIR, ml_logger)
+        ml_logger.save_config(settings)
         _, test_preds = train(settings, ml_logger, df_train, df_test)
     return test_preds
 
