@@ -6,7 +6,7 @@ import yaml
 import pickle
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -15,10 +15,11 @@ from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import _LRScheduler
 from transformers import AutoTokenizer, AutoModel, PreTrainedTokenizer, PreTrainedModel
 from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
+from datasets import load_dataset
 from fastprogress.fastprogress import master_bar, progress_bar
 
 from mykaggle.lib.ml_logger import MLLogger
-from mykaggle.lib.routine import fix_seed, get_logger, save_config, parse
+from mykaggle.lib.routine import fix_seed, get_logger, parse
 from mykaggle.model.common import AttentionHead
 from mykaggle.trainer.base import Mode
 
@@ -26,7 +27,7 @@ from mykaggle.trainer.base import Mode
 # Settings
 #
 
-IS_DEBUG = True
+IS_DEBUG = False
 S = yaml.safe_load('''
 name: 'nlp_bert_multiclass_classification'
 competition: sample
@@ -40,16 +41,17 @@ training:
     num_gpus: 1
     train_file: train.csv
     test_file: test.csv
-    input_column: question_text
-    target_column: target
+    input_column: ['premise', 'hypothesis']
+    target_column: label
     num_folds: 5
     do_cv: true
+    cv: stratified
     train_only_fold:
     learning_rate: 0.00003
-    num_epochs: 2
-    batch_size: 8
+    num_epochs: 3
+    batch_size: 16
     test_batch_size: 16
-    num_accumulations: 4
+    num_accumulations: 2
     num_workers: 4
     scheduler: LinearDecayWithWarmUp
     batch_scheduler: true
@@ -57,16 +59,17 @@ training:
     warmup_epochs: 0.2
     logger_verbose_step: 10
     ckpt_callback_verbose: true
-    val_check_interval: 100
+    val_check_interval: 1000000
     optimizer: AdamW
     weight_decay: 0.0
     loss: ce
     loss_reduction: mean
+    use_only_fold: false
 model:
     model_name: microsoft/deberta-v3-base
     model_type: custom_head
     use_pretrained: true
-    num_classes: 2
+    num_classes: 3
     layer_norm_eps: 0.0000001
     dropout_rate: 0.1
     custom_head_types: ['cls'] # ['cls', 'attn', 'avg', 'max', 'conv']
@@ -84,22 +87,22 @@ SM = S['model']
 
 fix_seed()
 LOGGER = get_logger(__name__)
-DATADIR = Path('./data/quora/')
+DATADIR = Path('./data/mnli/')
 CKPTDIR = Path('./ckpt/') / S['name']
 if not CKPTDIR.exists():
     CKPTDIR.mkdir()
-
 
 #
 # Load Data
 #
 
 
-DF_TRAIN = pd.read_csv(DATADIR / ST['train_file'])
+DATASET = load_dataset('glue', 'mnli', cache_dir=str(DATADIR))
+DF_TRAIN = pd.DataFrame(DATASET['train'])  # type: ignore
 if IS_DEBUG:
     DF_TRAIN = DF_TRAIN.iloc[:1000]
-DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
-DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
+DF_TEST = pd.DataFrame(DATASET['test_matched'])  # type: ignore
+DF_SUB = DF_TEST.copy().drop(['premise', 'hypothesis'], axis=1)
 
 FOLD_COLUMN = 'fold'
 
@@ -119,7 +122,8 @@ class MyDataset(Dataset):
         super().__init__()
         self.st = s['training']
         self.df = df
-        self.inputs = df[self.st['input_column']].values
+        self.premises = df[self.st['input_column'][0]].values
+        self.hypothesises = df[self.st['input_column'][1]].values
         self.labels = None
         if self.st['target_column'] in df.columns:
             self.labels = df[self.st['target_column']].values
@@ -131,9 +135,10 @@ class MyDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, index: int):
-        input = self.inputs[index]
+        pre = self.premises[index]
+        hyp = self.hypothesises[index]
         inputs = self.tokenizer(
-            input,
+            pre, hyp,
             padding='max_length',
             truncation=True,
             max_length=self.st['max_length'],
@@ -372,7 +377,7 @@ class Trainer:
         self.global_step = 0
         self.best_score = 0.0
         self.scaler = GradScaler(enabled=self.st['use_amp'])
-        self.device = torch.device('cuda')
+        self.device = torch.device(s['device'])
         self.mb = master_bar(range(self.st['num_epochs']))
 
     def train(
@@ -452,11 +457,11 @@ class Trainer:
         if current_epoch < self.st['warmup_epochs']:
             return
         preds, targets = self.validation(valid_dataloader, model)
-        val_metric = f1_score(np.argmax(targets, -1), np.argmax(preds, -1))
+        val_metric = accuracy_score(np.argmax(targets, -1), np.argmax(preds, -1))
         self._log_metric(f'val_metric_{self.fold}', val_metric, step=self.global_step)
         if val_metric > self.best_score:
             if self.st['ckpt_callback_verbose']:
-                self.mb.write(f'FOLD {self.fold}, best F1 updated: {val_metric:.5f} from {self.best_score:.5f}')
+                self.mb.write(f'FOLD {self.fold}, best acc updated: {val_metric:.5f} from {self.best_score:.5f}')
             self.best_score = val_metric
             self.save_model(model, self.fold)
 
@@ -496,43 +501,49 @@ class Trainer:
 
 
 def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
-    tokenizer = AutoTokenizer.from_pretrained(SM['model_name'])
-    oof_preds = np.zeros((df.shape[0], SM['num_classes']))
+    st = s['training']
+    sm = s['model']
+    ml_logger.log_params(st)
+    ml_logger.log_params(sm)
+    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
+    oof_preds = np.zeros((df.shape[0], sm['num_classes']))
 
-    for fold in range(ST['num_folds']):
+    for fold in range(st['num_folds']):
         df_train = df[df[FOLD_COLUMN] != fold]
         df_valid = df[df[FOLD_COLUMN] == fold]
-        train_ds = MyDataset(S, df_train, tokenizer, Mode.TRAIN)
-        valid_ds = MyDataset(S, df_valid, tokenizer, Mode.VALID)
-        train_dataloader = get_dataloader(train_ds, ST['batch_size'], ST['num_workers'], Mode.TRAIN)
-        valid_dataloader = get_dataloader(valid_ds, ST['test_batch_size'], ST['num_workers'], Mode.VALID)
-        ST['num_batches'] = len(train_dataloader)
-        ST['num_total_steps'] = len(train_dataloader) * ST['num_epochs']
-        model = get_model(SM).cuda()
+        train_ds = MyDataset(s, df_train, tokenizer, Mode.TRAIN)
+        valid_ds = MyDataset(s, df_valid, tokenizer, Mode.VALID)
+        train_dataloader = get_dataloader(train_ds, st['batch_size'], st['num_workers'], Mode.TRAIN)
+        valid_dataloader = get_dataloader(valid_ds, st['test_batch_size'], st['num_workers'], Mode.VALID)
+        st['num_batches'] = len(train_dataloader)
+        st['num_total_steps'] = len(train_dataloader) * st['num_epochs']
+        model = get_model(sm).to(s['device'])
 
         # training
-        loss_fn = get_loss_fn(ST)
-        optimizer = get_optimizer(ST['optimizer'], ST['learning_rate'], ST['weight_decay'], model.parameters())
-        scheduler = get_scheduler(ST, optimizer)
-        trainer = Trainer(S, CKPTDIR, ml_logger, fold)
+        loss_fn = get_loss_fn(st)
+        optimizer = get_optimizer(st['optimizer'], st['learning_rate'], st['weight_decay'], model.parameters())
+        scheduler = get_scheduler(st, optimizer)
+        trainer = Trainer(s, CKPTDIR, ml_logger, fold)
         trainer.train(train_dataloader, valid_dataloader, model, loss_fn, optimizer, scheduler)
 
         # predict
         state_dict = torch.load(CKPTDIR / f'model_{fold}.pt')
         model.load_state_dict(state_dict)
         val_preds, _ = trainer.validation(valid_dataloader, model)
-        score = f1_score(df_valid[ST['target_column']].values, np.argmax(val_preds, -1))
-        LOGGER.info(f'f1_{fold}: {score}')
-        ml_logger.log_metric(f'f1_{fold}', score)
+        score = accuracy_score(df_valid[st['target_column']].values, np.argmax(val_preds, -1))
+        LOGGER.info(f'acc_{fold}: {score}')
+        ml_logger.log_metric(f'acc_{fold}', score)
         oof_preds[df_valid.index, :] = val_preds
         model.model.config.save_pretrained(CKPTDIR)  # type: ignore
         del trainer, model, state_dict, optimizer, scheduler, loss_fn
         del train_ds, valid_ds, train_dataloader, valid_dataloader
         gc.collect()
         torch.cuda.empty_cache()
+        if ST.get('use_only_fold', False):
+            break
 
-    score = f1_score(df['target'].values, np.argmax(oof_preds, -1))
-    ml_logger.log_metric('f1', score)
+    score = accuracy_score(df['target'].values, np.argmax(oof_preds, -1))
+    ml_logger.log_metric('acc', score)
     pickle.dump(oof_preds, open(CKPTDIR / 'oof_preds.pkl', 'wb'))
     LOGGER.info(f'training finished. Metric: {score:.3f}')
     return oof_preds
@@ -547,7 +558,7 @@ def predict(
     use_amp: bool = True
 ) -> np.ndarray:
     preds = np.zeros((len(df), num_classes), dtype=np.float32)
-    device = torch.device('cuda')
+    device = torch.device(S['device'])
     model.to(device)
     model.eval()
     for i, batch in enumerate(dataloader):
@@ -586,6 +597,8 @@ def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         model.load_state_dict(torch.load(CKPTDIR / f'model_{fold}.pt'))
         preds = test(s, model, dataloader, df)
         test_preds += preds / st['num_folds']
+        if st.get('use_only_fold', False):
+            break
     pickle.dump(test_preds, open(CKPTDIR / 'test_preds.pkl', 'wb'))
     return test_preds
 
@@ -595,10 +608,11 @@ def submit(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame, preds: np.n
     df.to_csv(CKPTDIR / 'submission.csv', index=False)
 
 
-def run():
+def run(gpu_index: int = 0):
     ml_logger = MLLogger('cfiken', CKPTDIR)
+    S['device'] = f'cuda:{gpu_index}'
     with ml_logger.start(experiment_name=S['competition'], run_name=S['name']):
-        save_config(S, CKPTDIR, ml_logger)
+        ml_logger.save_config(S)
         if S['do_training']:
             train(S, ml_logger, DF_TRAIN.copy())
         if S['do_inference']:
@@ -610,7 +624,6 @@ def run():
 if __name__ == '__main__':
     args = parse()
     LOGGER.info(f'starting with args: {args}')
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
     os.environ['TOKENIZERS_PARALLELISM'] = 'true'
     fix_seed(S['seed'])
-    run()
+    run(int(args.gpus))
