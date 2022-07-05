@@ -21,8 +21,6 @@ except ImportError:
     from unittest.mock import MagicMock
     tf = MagicMock()
 
-from mykaggle.lib.ml_logger import MLLogger
-
 
 def parse() -> Namespace:
     parser = ArgumentParser(description='Process some integers.')
@@ -47,26 +45,6 @@ def load_config(path: Path, is_full_path: bool = False) -> Dict[str, Any]:
         return json.load(open(path, 'r'))
     else:
         raise ValueError('config file type is allowed only in ".yml" and ".json"')
-
-
-def save_config(settings: Dict[str, Any], save_dir: Path, logger: Optional[MLLogger] = None) -> None:
-    filepath = save_dir / 'config.yml'
-
-    def serialize(obj: Dict[str, Any]) -> Dict[str, Any]:
-        new_obj: Dict[str, Any] = {}
-        for k, v in obj.items():
-            if isinstance(v, Dict):
-                new_obj[k] = serialize(v)
-            elif isinstance(v, (str, int, float, bool, list, tuple)):
-                new_obj[k] = v
-            else:
-                new_obj[k] = str(v)
-        return new_obj
-
-    with open(filepath, 'w') as f:
-        yaml.dump(serialize(settings), f)
-    if logger is not None:
-        logger.log_artifact(str(filepath))
 
 
 def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
