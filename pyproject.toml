@@ -39,6 +39,7 @@ pyarrow = "^8.0.0"
 datasets = "^2.3.2"
 sentencepiece = "^0.1.96"
 fsspec = "^2022.5.0"
+timm = "^0.5.4"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"
