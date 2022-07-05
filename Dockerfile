@@ -60,7 +60,7 @@ RUN mkdir -p ~/.ssh \
   && ssh-keyscan github.com >> .ssh/known_hosts
 
 # Python
-ENV PYTHON_VERSION=3.8.6 \
+ENV PYTHON_VERSION=3.10.4 \
   POETRY_VIRTUALENVS_IN_PROJECT=1
 RUN git clone https://github.com/pyenv/pyenv.git .pyenv \
   && git clone https://github.com/pyenv/pyenv-virtualenv.git .pyenv/plugins/pyenv-virtualenv 

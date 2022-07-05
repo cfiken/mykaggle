@@ -21,7 +21,7 @@ import albumentations as al
 from albumentations.pytorch import ToTensorV2
 
 from mykaggle.lib.ml_logger import MLLogger
-from mykaggle.lib.routine import fix_seed, get_logger, save_config, parse
+from mykaggle.lib.routine import fix_seed, get_logger, parse
 from mykaggle.model.common import AttentionHead
 from mykaggle.trainer.base import Mode
 from mykaggle.trainer.cv_strategy import Stratified
@@ -318,6 +318,23 @@ class ModelCustomHeadEnsemble(nn.Module):
                 module.bias.data.zero_()
 
 
+class ModelTIMM(nn.Module):
+    def __init__(
+        self,
+        settings: Dict[str, Any],
+        model: nn.Module
+    ) -> None:
+        super().__init__()
+        self.st = settings['training']
+        self.sm = settings['model']
+        self.model = model
+
+    def forward(self, inputs):
+        outputs = self.model(inputs)
+        outputs = outputs.reshape((inputs.shape[0]))
+        return outputs
+
+
 def get_model(s: Dict[str, Any]) -> nn.Module:
     model_name_or_path = s['model_name'] if s['use_pretrained'] else s['ckpt_from_dir']
     hg_model = AutoModel.from_pretrained(model_name_or_path)
@@ -397,7 +414,7 @@ class Trainer:
         self.global_step = 0
         self.best_score = 1000.0
         self.scaler = GradScaler(enabled=self.st['use_amp'])
-        self.device = torch.device('cuda')
+        self.device = torch.device(s['device'])
         self.mb = master_bar(range(self.st['num_epochs']))
 
     def train(
@@ -535,7 +552,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         valid_dataloader = get_dataloader(valid_ds, st['test_batch_size'], st['num_workers'], Mode.VALID)
         st['num_batches'] = len(train_dataloader)
         st['num_total_steps'] = len(train_dataloader) * st['num_epochs']
-        model = get_model(sm).cuda()
+        model = get_model(sm).to(s['device'])
 
         # training
         loss_fn = get_loss_fn(st)
@@ -575,7 +592,7 @@ def predict(
     use_amp: bool = True
 ) -> np.ndarray:
     preds = np.zeros((len(df)), dtype=np.float32)
-    device = torch.device('cuda')
+    device = torch.device(S['device'])
     model.to(device)
     model.eval()
     for i, batch in enumerate(dataloader):
@@ -624,10 +641,11 @@ def submit(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame, preds: np.n
     df.to_csv(CKPTDIR / 'submission.csv', index=False)
 
 
-def run():
+def run(gpu_index: int = 0):
     ml_logger = MLLogger('cfiken', CKPTDIR)
+    S['device'] = f'cuda:{gpu_index}'
     with ml_logger.start(experiment_name=S['competition'], run_name=S['name']):
-        save_config(S, CKPTDIR, ml_logger)
+        ml_logger.save_config(S)
         if S['do_training']:
             train(S, ml_logger, DF_TRAIN.copy())
         if S['do_inference']:
@@ -639,7 +657,6 @@ def run():
 if __name__ == '__main__':
     args = parse()
     LOGGER.info(f'starting with args: {args}')
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
     os.environ['TOKENIZERS_PARALLELISM'] = 'true'
     fix_seed(S['seed'])
-    run()
+    run(int(args.gpus))

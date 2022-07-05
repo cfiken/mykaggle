@@ -19,7 +19,7 @@ from fastprogress.fastprogress import master_bar, progress_bar
 
 from mykaggle.lib.ops import sigmoid
 from mykaggle.lib.ml_logger import MLLogger
-from mykaggle.lib.routine import fix_seed, get_logger, save_config, parse
+from mykaggle.lib.routine import fix_seed, get_logger, parse
 from mykaggle.model.common import AttentionHead
 from mykaggle.trainer.base import Mode
 
@@ -27,7 +27,7 @@ from mykaggle.trainer.base import Mode
 # Settings
 #
 
-IS_DEBUG = True
+IS_DEBUG = False
 S = yaml.safe_load('''
 name: 'nlp_bert_binary_classification'
 competition: sample
@@ -48,15 +48,15 @@ training:
     cv: stratified
     train_only_fold:
     learning_rate: 0.00003
-    num_epochs: 2
-    batch_size: 8
+    num_epochs: 1
+    batch_size: 16
     test_batch_size: 16
-    num_accumulations: 4
+    num_accumulations: 2
     num_workers: 4
     scheduler: LinearDecayWithWarmUp
     batch_scheduler: true
     max_length: 512
-    warmup_epochs: 0.2
+    warmup_epochs: 0.1
     logger_verbose_step: 10
     ckpt_callback_verbose: true
     val_check_interval: 10000
@@ -66,7 +66,7 @@ training:
     loss_reduction: mean
     use_only_fold: false
 model:
-    model_name: microsoft/deberta-base
+    model_name: microsoft/deberta-v3-base
     model_type: custom_head
     use_pretrained: true
     layer_norm_eps: 0.0000001
@@ -374,7 +374,7 @@ class Trainer:
         self.global_step = 0
         self.best_score = 0.0
         self.scaler = GradScaler(enabled=self.st['use_amp'])
-        self.device = torch.device('cuda')
+        self.device = torch.device(s['device'])
         self.mb = master_bar(range(self.st['num_epochs']))
 
     def train(
@@ -515,7 +515,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         valid_dataloader = get_dataloader(valid_ds, st['test_batch_size'], st['num_workers'], Mode.VALID)
         st['num_batches'] = len(train_dataloader)
         st['num_total_steps'] = len(train_dataloader) * st['num_epochs']
-        model = get_model(sm).cuda()
+        model = get_model(sm).to(s['device'])
 
         # training
         loss_fn = get_loss_fn(st)
@@ -555,7 +555,7 @@ def predict(
     use_amp: bool = True
 ) -> np.ndarray:
     preds = np.zeros((len(df)), dtype=np.float32)
-    device = torch.device('cuda')
+    device = torch.device(S['device'])
     model.to(device)
     model.eval()
     for i, batch in enumerate(dataloader):
@@ -607,10 +607,11 @@ def submit(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame, preds: np.n
     df.to_csv(CKPTDIR / 'submission.csv', index=False)
 
 
-def run():
+def run(gpu_index: int = 0):
     ml_logger = MLLogger('cfiken', CKPTDIR)
+    S['device'] = f'cuda:{gpu_index}'
     with ml_logger.start(experiment_name=S['competition'], run_name=S['name']):
-        save_config(S, CKPTDIR, ml_logger)
+        ml_logger.save_config(S)
         if S['do_training']:
             train(S, ml_logger, DF_TRAIN.copy())
         if S['do_inference']:
@@ -622,7 +623,6 @@ def run():
 if __name__ == '__main__':
     args = parse()
     LOGGER.info(f'starting with args: {args}')
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
     os.environ['TOKENIZERS_PARALLELISM'] = 'true'
     fix_seed(S['seed'])
-    run()
+    run(int(args.gpus))

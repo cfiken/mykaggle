@@ -4,6 +4,7 @@ from pathlib import Path
 import contextlib
 from enum import Enum
 import json
+import yaml
 import torch
 from torch import nn
 import numpy as np
@@ -16,6 +17,9 @@ except ImportError:
     tf = MagicMock()
 
 from mykaggle.lib.slack import Slack
+from mykaggle.lib.routine import get_logger
+
+logger = get_logger(__name__)
 
 
 class OutputType(Enum):
@@ -107,7 +111,7 @@ class MLLogger:
             mlflow.log_params(params)
 
         if OutputType.STD in self._output_types:
-            print(params)
+            logger.info(params)
 
     def log_tf_metrics(self, metrics: Dict[str, Any], step: np.int32) -> None:
         '''
@@ -127,7 +131,7 @@ class MLLogger:
 
         if OutputType.STD in self._output_types:
             for k, v in metrics.items():
-                print(f'{k}: {v}')
+                logger.info(f'{k}: {v}')
 
     def log_tf_metric(self, name: str, metric, step: np.int32) -> None:
         '''
@@ -144,7 +148,7 @@ class MLLogger:
         if OutputType.MLFLOW in self._output_types:
             mlflow.log_metric(name, value.numpy(), step=step)
         if OutputType.STD in self._output_types:
-            print(f'{name}: {value}')
+            logger.info(f'{name}: {value}')
 
     def log_metrics(self, metrics: Dict[str, float], step: int = 0) -> None:
         '''
@@ -219,7 +223,10 @@ class MLLogger:
         :artifact_path: 保存先のあるディレクトリ以下保存したい場合に指定する。fold ごとにディレクトリを分けたい場合など。
         '''
         if OutputType.MLFLOW in self._output_types:
-            mlflow.log_artifact(file)
+            try:
+                mlflow.log_artifact(file)
+            except Exception as e:
+                logger.error(f'ERROR: log_artifacts failed. error: {e}')
 
     def log_artifacts(self, dir: str, artifact_path: Optional[str] = None) -> None:
         '''
@@ -228,7 +235,28 @@ class MLLogger:
         :artifact_path: 保存先のあるディレクトリ以下保存したい場合に指定する。fold ごとにディレクトリを分けたい場合など。
         '''
         if OutputType.MLFLOW in self._output_types:
-            mlflow.log_artifacts(dir, artifact_path=artifact_path)
+            try:
+                mlflow.log_artifacts(dir, artifact_path=artifact_path)
+            except Exception as e:
+                logger.error(f'ERROR: log_artifacts failed. error: {e}')
+
+    def save_config(self, settings: Dict[str, Any]) -> None:
+        filepath = self._logdir / 'config.yml'
+
+        def serialize(obj: Dict[str, Any]) -> Dict[str, Any]:
+            new_obj: Dict[str, Any] = {}
+            for k, v in obj.items():
+                if isinstance(v, Dict):
+                    new_obj[k] = serialize(v)
+                elif isinstance(v, (str, int, float, bool, list, tuple)):
+                    new_obj[k] = v
+                else:
+                    new_obj[k] = str(v)
+            return new_obj
+
+        with open(filepath, 'w') as f:
+            yaml.dump(serialize(settings), f)
+        self.log_artifact(str(filepath))
 
     def log_running(self) -> None:
         '''

@@ -15,6 +15,10 @@ jobs:
           name: install dependencies
           command: |
             poetry install 
+      - run:
+          name: install torch
+          command: |
+            ./script/setup_torch.sh 
       - save_cache:
           paths:
             - ./.venv

@@ -4,9 +4,9 @@ This is inspired by allennlp: https://github.com/allenai/allennlp/blob/master/al
 from collections import defaultdict
 from typing import TypeVar, Type, Callable, Dict, List, Optional, Tuple
 import importlib
-import logging
+from mykaggle.lib.routine import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T", bound="Registrable")
 
