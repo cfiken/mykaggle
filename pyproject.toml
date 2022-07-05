@@ -35,13 +35,10 @@ category-encoders = "^2.5.0"
 protobuf = "^3.20.0"
 opencv-python = "^4.6.0.66"
 albumentations = "^1.2.0"
-
-# [[tool.poetry.source]]
-# name = "pytorch-cu113"
-# url = "https://download.pytorch.org/whl/cu113/"
-# secondary = true
 pyarrow = "^8.0.0"
 datasets = "^2.3.2"
+sentencepiece = "^0.1.96"
+fsspec = "^2022.5.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"
@@ -52,3 +49,9 @@ autopep8 = "*"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+#[[tool.poetry.source]]
+#name = "pytorch-cu113"
+# url = "https://download.pytorch.org/whl/cu113/"
+# secondary = true
+
