@@ -72,7 +72,7 @@ model:
     model_name: tf_efficientnet_b4_ns
     model_type: cls
     use_pretrained: true
-    image_size: 32
+    image_size: 224
     num_classes: 100
     layer_norm_eps: 0.0000001
     dropout_rate: 0.1

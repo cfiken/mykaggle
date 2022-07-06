@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y \
     zsh \
     curl \
     git \
+    zip \
     libbz2-dev \
     libcupti-dev \
     libffi-dev \
