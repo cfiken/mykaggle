@@ -6,18 +6,22 @@ import yaml
 import pickle
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score
+import cv2
 import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import _LRScheduler
-from transformers import AutoTokenizer, AutoModel, PreTrainedTokenizer, PreTrainedModel
+from transformers import AutoModel, PreTrainedModel
 from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
+from datasets import load_dataset
 from fastprogress.fastprogress import master_bar, progress_bar
+import albumentations as al
+from albumentations.pytorch import ToTensorV2
+import timm
 
-from mykaggle.lib.ops import sigmoid
 from mykaggle.lib.ml_logger import MLLogger
 from mykaggle.lib.routine import fix_seed, get_logger, parse
 from mykaggle.model.common import AttentionHead
@@ -29,7 +33,7 @@ from mykaggle.trainer.base import Mode
 
 IS_DEBUG = True
 S = yaml.safe_load('''
-name: 'nlp_bert_binary_classification'
+name: 'cv_effb4_multiclass_cllasification'
 competition: sample
 do_training: true
 do_inference: true
@@ -41,34 +45,35 @@ training:
     num_gpus: 1
     train_file: train.csv
     test_file: test.csv
-    input_column: question_text
-    target_column: target
+    input_column: img
+    target_column: fine_label
     num_folds: 5
-    do_cv: true
+    do_cv: false
     cv: stratified
     train_only_fold:
-    learning_rate: 0.00003
-    num_epochs: 3
+    learning_rate: 0.001
+    num_epochs: 10
     batch_size: 16
-    test_batch_size: 16
+    test_batch_size: 32
     num_accumulations: 2
     num_workers: 4
     scheduler: LinearDecayWithWarmUp
     batch_scheduler: true
-    max_length: 512
-    warmup_epochs: 0.3
+    warmup_epochs: 0.0
     logger_verbose_step: 10
     ckpt_callback_verbose: true
     val_check_interval: 1000000
-    optimizer: AdamW
+    optimizer: Adam
     weight_decay: 0.0
-    loss: ce
+    loss: mse
     loss_reduction: mean
     use_only_fold: false
 model:
-    model_name: microsoft/deberta-v3-base
-    model_type: custom_head
+    model_name: tf_efficientnet_b4_ns
+    model_type: cls
     use_pretrained: true
+    image_size: 32
+    num_classes: 100
     layer_norm_eps: 0.0000001
     dropout_rate: 0.1
     custom_head_types: ['cls'] # ['cls', 'attn', 'avg', 'max', 'conv']
@@ -86,24 +91,24 @@ SM = S['model']
 
 fix_seed()
 LOGGER = get_logger(__name__)
-DATADIR = Path('./data/quora/')
+DATADIR = Path('./data/cifar100')
 CKPTDIR = Path('./ckpt/') / S['name']
 if not CKPTDIR.exists():
     CKPTDIR.mkdir()
-
+TRAINDIR = DATADIR / 'train_images'
+TESTDIR = DATADIR / 'test_images'
 
 #
 # Load Data
 #
 
 
-DF_TRAIN = pd.read_csv(DATADIR / ST['train_file'])
-DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
-DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
+DATASET = load_dataset('cifar100', cache_dir=str(DATADIR))
+DF_TRAIN = pd.DataFrame(DATASET['train'])  # type: ignore
 if IS_DEBUG:
     DF_TRAIN = DF_TRAIN.iloc[:10000]
-    DF_TEST = DF_TEST.iloc[:10000]
-    DF_SUB = DF_SUB.iloc[:10000]
+DF_TEST = pd.DataFrame(DATASET['test'])  # type: ignore
+DF_SUB = DF_TEST.copy().drop(['fine_label', 'coarse_label'], axis=1)
 
 FOLD_COLUMN = 'fold'
 
@@ -118,37 +123,55 @@ LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
 #
 
 
+def get_img(path: Path) -> np.ndarray:
+    im_bgr = cv2.imread(str(path))
+    im_rgb = im_bgr[:, :, ::-1]
+    return im_rgb
+
+
 class MyDataset(Dataset):
-    def __init__(self, s: Dict, df: pd.DataFrame, tokenizer: PreTrainedTokenizer, mode: Mode, *args, **kwargs):
+    def __init__(self, s: Dict, df: pd.DataFrame, datadir: Path, mode: Mode, *args, **kwargs):
         super().__init__()
         self.st = s['training']
+        sm = s['model']
         self.df = df
-        self.inputs = df[self.st['input_column']].values
+        self.images = df[self.st['input_column']].values
         self.labels = None
         if self.st['target_column'] in df.columns:
             self.labels = df[self.st['target_column']].values
-        self.tokenizer = tokenizer
+            self.labels = torch.eye(sm['num_classes'])[self.labels]
+        self.datadir = datadir
         self.mode = mode
+        self.transforms = al.Compose([
+            # al.RandomResizedCrop(
+            #     sm['image_size'], sm['image_size'],
+            #     scale=(0.1, 1.0)
+            # ),
+            al.Resize(sm['image_size'], sm['image_size'], p=1.0),
+            # al.Transpose(p=0.5),
+            # al.HorizontalFlip(p=0.5),
+            # al.VerticalFlip(p=0.5),
+            # al.ShiftScaleRotate(p=0.5),
+            # al.HueSaturationValue(hue_shift_limit=0.2, sat_shift_limit=0.2, val_shift_limit=0.2, p=0.5),
+            # al.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=(-0.1, 0.1), p=0.5),
+            al.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, p=1.0),
+            # al.CoarseDropout(max_holes=10, max_height=32, max_width=32, p=0.5),
+            ToTensorV2(p=1.0),
+        ], p=1.)
 
     def __len__(self) -> int:
         return len(self.df)
 
     def __getitem__(self, index: int):
-        input = self.inputs[index]
-        inputs = self.tokenizer(
-            input,
-            padding='max_length',
-            truncation=True,
-            max_length=self.st['max_length'],
-            return_tensors='pt'
-        )
-        for key in inputs.keys():
-            inputs[key] = inputs[key][0]
+        # img = get_img(self.datadir / self.images[index])
+        img = np.asarray(self.images[index])
+        if self.transforms:
+            img = self.transforms(image=img)['image']
+        if self.labels is None:
+            return img
 
-        if self.labels is not None:
-            label = self.labels[index]
-            return inputs, label
-        return inputs
+        target = self.labels[index]
+        return img, target
 
 
 def get_dataloader(
@@ -180,8 +203,7 @@ class ModelCustomHeadEnsemble(nn.Module):
         model: PreTrainedModel
     ) -> None:
         super().__init__()
-        self.st = settings['training']
-        self.sm = settings['model']
+        self.sm = settings
         self.model = model
         self.hidden_size = model.config.hidden_size  # type: ignore
         self.num_reinit_layers = self.sm.get('num_reinit_layers', 0)
@@ -197,17 +219,17 @@ class ModelCustomHeadEnsemble(nn.Module):
             hidden_dim = self.sm.get('conv_head_hidden_dim', 256)
             kernel_size = self.sm.get('conv_head_kernel_size', 2)
             self.conv1 = nn.Conv1d(self.hidden_size, hidden_dim, kernel_size=kernel_size, padding=1)
-            self.conv2 = nn.Conv1d(hidden_dim, 1, kernel_size=kernel_size, padding=1)
+            self.conv2 = nn.Conv1d(hidden_dim, self.sm['num_classes'], kernel_size=kernel_size, padding=1)
         if 'layers_sum' in self.head_types:
             self.layer_weight = nn.Parameter(torch.tensor([1] * self.num_use_layers, dtype=torch.float))
 
         for head in self.head_types:
             if 'concat' in head:
-                output_layers[head] = nn.Linear(self.hidden_size * self.num_use_layers, 1)
+                output_layers[head] = nn.Linear(self.hidden_size * self.num_use_layers, self.sm['num_classes'])
             elif head == 'conv':
                 continue
             else:
-                output_layers[head] = nn.Linear(self.hidden_size, 1)
+                output_layers[head] = nn.Linear(self.hidden_size, self.sm['num_classes'])
         self.output_layers = nn.ModuleDict(output_layers)
 
         self.dropout = nn.Dropout(self.sm['dropout_rate'])
@@ -218,7 +240,7 @@ class ModelCustomHeadEnsemble(nn.Module):
         self.initialize()
 
     def forward(self, inputs):
-        outputs = self.model(**inputs, output_hidden_states=True)
+        outputs = self.model(inputs, output_hidden_states=True)
         head_features = []
         features = []
         if 'cls' in self.head_types:
@@ -272,14 +294,14 @@ class ModelCustomHeadEnsemble(nn.Module):
             head_features.append(weighted_sum_feature)
             features.append(feature)
 
-        outputs = torch.stack(features, -1)  # [bs, 1, num_heads]
+        outputs = torch.stack(features, -1)  # [bs, num_classes, num_heads]
         if len(self.head_types) > 1:
             if self.ensemble_type == 'avg':
                 outputs = torch.mean(outputs, -1)
             elif self.ensemble_type == 'weight':
                 weight = self.ensemble_weight.weight / torch.sum(self.ensemble_weight.weight)
                 outputs = torch.sum(weight * outputs, -1)
-        outputs = outputs.reshape((inputs['input_ids'].shape[0]))
+        outputs = outputs.reshape((inputs.shape[0], self.sm['num_classes']))
         return outputs
 
     def initialize(self):
@@ -296,11 +318,30 @@ class ModelCustomHeadEnsemble(nn.Module):
                 module.bias.data.zero_()
 
 
+class ModelTIMM(nn.Module):
+    def __init__(
+        self,
+        settings: Dict[str, Any],
+        model: nn.Module
+    ) -> None:
+        super().__init__()
+        self.sm = settings
+        self.model = model
+
+    def forward(self, inputs):
+        outputs = self.model(inputs)
+        outputs = outputs.reshape((inputs.shape[0], self.sm['num_classes']))
+        return outputs
+
+
 def get_model(s: Dict[str, Any]) -> nn.Module:
     model_name_or_path = s['model_name'] if s['use_pretrained'] else s['ckpt_from_dir']
-    hg_model = AutoModel.from_pretrained(model_name_or_path)
-    model = ModelCustomHeadEnsemble(S, hg_model)
-    return model
+    try:
+        _model = AutoModel.from_pretrained(model_name_or_path)
+        return ModelCustomHeadEnsemble(s, _model)
+    except Exception:
+        _model = timm.create_model(s['model_name'], pretrained=s['use_pretrained'], num_classes=s['num_classes'])
+        return ModelTIMM(s, _model)
 
 
 #
@@ -309,7 +350,7 @@ def get_model(s: Dict[str, Any]) -> nn.Module:
 
 
 def get_loss_fn(s: Dict[str, Any], **kwargs) -> nn.Module:
-    return nn.BCEWithLogitsLoss(reduction=s['loss_reduction'])
+    return nn.CrossEntropyLoss(reduction=s['loss_reduction'])
 
 
 def get_optimizer(name: str, lr: float, weight_decay: float, parameters, **kwargs) -> torch.optim.Optimizer:
@@ -418,8 +459,7 @@ class Trainer:
         scheduler: Optional[_LRScheduler],
         num_steps_per_epoch: int
     ):
-        for key in inputs.keys():
-            inputs[key] = inputs[key].to(self.device).long()
+        inputs = inputs.to(self.device).float()
         if isinstance(labels, (tuple, list)):
             labels, weights = labels
             weights = weights.to(self.device)
@@ -456,11 +496,11 @@ class Trainer:
         if current_epoch < self.st['warmup_epochs']:
             return
         preds, targets = self.validation(valid_dataloader, model)
-        val_metric = roc_auc_score(targets, preds)
+        val_metric = accuracy_score(np.argmax(targets, -1), np.argmax(preds, -1))
         self._log_metric(f'val_metric_{self.fold}', val_metric, step=self.global_step)
         if val_metric > self.best_score:
             if self.st['ckpt_callback_verbose']:
-                self.mb.write(f'FOLD {self.fold}, best auc updated: {val_metric:.5f} from {self.best_score:.5f}')
+                self.mb.write(f'FOLD {self.fold}, best acc updated: {val_metric:.5f} from {self.best_score:.5f}')
             self.best_score = val_metric
             self.save_model(model, self.fold)
 
@@ -473,12 +513,11 @@ class Trainer:
         model.eval()
         bs = self.st['test_batch_size']
         data_size = len(dataloader.dataset)  # type: ignore
-        preds = np.zeros(data_size)
-        targets = np.zeros(data_size)
+        preds = np.zeros((data_size, self.sm['num_classes']))
+        targets = np.zeros((data_size, self.sm['num_classes']))
         for i, batch in enumerate(dataloader):
             inputs, labels = batch
-            for key in inputs.keys():
-                inputs[key] = inputs[key].to(self.device).long()
+            inputs = inputs.to(self.device).float()
             labels = labels.to(self.device).float()
 
             with autocast(enabled=self.st['use_amp']):
@@ -486,8 +525,8 @@ class Trainer:
                     outputs = model(inputs)
                     if isinstance(outputs, (tuple, list)):
                         outputs = outputs[0]
-            preds[i * bs: (i + 1) * bs] = outputs.detach().cpu().numpy()
-            targets[i * bs: (i + 1) * bs] = labels.cpu().numpy()
+            preds[i * bs: (i + 1) * bs, :] = outputs.detach().cpu().numpy()
+            targets[i * bs: (i + 1) * bs, :] = labels.cpu().numpy()
         return preds, targets
 
     def save_model(self, model: nn.Module, fold: int) -> None:
@@ -509,14 +548,13 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     sm = s['model']
     ml_logger.log_params(st)
     ml_logger.log_params(sm)
-    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
-    oof_preds = np.zeros((df.shape[0]))
+    oof_preds = np.zeros((df.shape[0], sm['num_classes']))
 
     for fold in range(st['num_folds']):
         df_train = df[df[FOLD_COLUMN] != fold]
         df_valid = df[df[FOLD_COLUMN] == fold]
-        train_ds = MyDataset(s, df_train, tokenizer, Mode.TRAIN)
-        valid_ds = MyDataset(s, df_valid, tokenizer, Mode.VALID)
+        train_ds = MyDataset(s, df_train, TRAINDIR, Mode.TRAIN)
+        valid_ds = MyDataset(s, df_valid, TRAINDIR, Mode.VALID)
         train_dataloader = get_dataloader(train_ds, st['batch_size'], st['num_workers'], Mode.TRAIN)
         valid_dataloader = get_dataloader(valid_ds, st['test_batch_size'], st['num_workers'], Mode.VALID)
         st['num_batches'] = len(train_dataloader)
@@ -534,11 +572,14 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         state_dict = torch.load(CKPTDIR / f'model_{fold}.pt')
         model.load_state_dict(state_dict)
         val_preds, _ = trainer.validation(valid_dataloader, model)
-        score = roc_auc_score(df_valid[st['target_column']].values, val_preds)
-        LOGGER.info(f'auc_{fold}: {score}')
+        score = accuracy_score(df_valid[st['target_column']].values, np.argmax(val_preds, -1))
+        LOGGER.info(f'acc_{fold}: {score}')
         ml_logger.log_metric(f'metric_{fold}', score)
-        oof_preds[df_valid.index] = val_preds
-        model.model.config.save_pretrained(CKPTDIR)  # type: ignore
+        oof_preds[df_valid.index, :] = val_preds
+        try:
+            model.model.config.save_pretrained(CKPTDIR)  # type: ignore
+        except Exception:
+            pass
         del trainer, model, state_dict, optimizer, scheduler, loss_fn
         del train_ds, valid_ds, train_dataloader, valid_dataloader
         gc.collect()
@@ -546,7 +587,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         if ST.get('use_only_fold', False):
             break
 
-    score = roc_auc_score(df[st['target_column']].values, oof_preds)
+    score = accuracy_score(df[st['target_column']].values, np.argmax(oof_preds, -1))
     ml_logger.log_metric('metric', score)
     pickle.dump(oof_preds, open(CKPTDIR / 'oof_preds.pkl', 'wb'))
     LOGGER.info(f'training finished. Metric: {score:.3f}')
@@ -558,9 +599,10 @@ def predict(
     df: pd.DataFrame,
     dataloader: DataLoader,
     batch_size: int,
+    num_classes: int,
     use_amp: bool = True
 ) -> np.ndarray:
-    preds = np.zeros((len(df)), dtype=np.float32)
+    preds = np.zeros((len(df), num_classes), dtype=np.float32)
     device = torch.device(S['device'])
     model.to(device)
     model.eval()
@@ -569,32 +611,31 @@ def predict(
             inputs = batch[0]
         else:
             inputs = batch
-        for key in inputs.keys():
-            inputs[key] = inputs[key].to(device).long()
+        inputs = inputs.to(device).float()
         with autocast(enabled=use_amp):
             with torch.no_grad():
                 outputs = model(inputs)
                 if isinstance(outputs, (list, tuple)):
                     outputs = outputs[0]
-        preds[i * batch_size:(i + 1) * batch_size] = outputs.detach().cpu().numpy()
+        preds[i * batch_size:(i + 1) * batch_size, :] = outputs.detach().cpu().numpy()
     return preds
 
 
 def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.DataFrame):
     bs = s['training']['test_batch_size']
     use_amp = s['training']['use_amp']
-    preds = predict(model, df, dataloader, bs, use_amp)
+    num_classes = s['model']['num_classes']
+    preds = predict(model, df, dataloader, bs, num_classes, use_amp)
     return preds
 
 
 def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
-    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
-    test_preds = np.zeros((len(df)))
+    test_preds = np.zeros((len(df), sm['num_classes']))
     for fold in range(st['num_folds']):
         LOGGER.info(f'inference fold {fold} started.')
-        ds = MyDataset(s, df, tokenizer, Mode.TEST, fold)
+        ds = MyDataset(s, df, TESTDIR, Mode.TEST, fold)
         dataloader = get_dataloader(ds, st['test_batch_size'], st['num_workers'], Mode.TEST)
         model = get_model(sm)
         model.load_state_dict(torch.load(CKPTDIR / f'model_{fold}.pt'))
@@ -603,13 +644,12 @@ def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         if st.get('use_only_fold', False):
             break
     LOGGER.info('inference finished.')
-    test_preds = sigmoid(test_preds)
     pickle.dump(test_preds, open(CKPTDIR / 'test_preds.pkl', 'wb'))
     return test_preds
 
 
 def submit(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame, preds: np.ndarray) -> None:
-    df[s['training']['target_column']] = preds
+    df[s['training']['target_column']] = np.argmax(preds, -1)
     df.to_csv(CKPTDIR / 'submission.csv', index=False)
 
 
