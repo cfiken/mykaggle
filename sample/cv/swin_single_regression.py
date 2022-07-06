@@ -19,6 +19,7 @@ from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_wi
 from fastprogress.fastprogress import master_bar, progress_bar
 import albumentations as al
 from albumentations.pytorch import ToTensorV2
+import timm
 
 from mykaggle.lib.ml_logger import MLLogger
 from mykaggle.lib.routine import fix_seed, get_logger, parse
@@ -30,7 +31,7 @@ from mykaggle.trainer.cv_strategy import Stratified
 # Settings
 #
 
-IS_DEBUG = False
+IS_DEBUG = True
 S = yaml.safe_load('''
 name: 'cv_swin_single_regression'
 competition: sample
@@ -51,18 +52,18 @@ training:
     cv: stratified
     train_only_fold:
     learning_rate: 0.0001
-    num_epochs: 5
+    num_epochs: 3
     batch_size: 8
     test_batch_size: 16
     num_accumulations: 4
     num_workers: 4
     scheduler: LinearDecayWithWarmUp
     batch_scheduler: true
-    warmup_epochs: 0.5
+    warmup_epochs: 0.3
     logger_verbose_step: 10
     ckpt_callback_verbose: true
-    val_check_interval: 100
-    optimizer: AdamW
+    val_check_interval: 100000
+    optimizer: Adam
     weight_decay: 0.0
     loss: mse
     loss_reduction: mean
@@ -71,6 +72,7 @@ model:
     model_name: microsoft/swin-base-patch4-window12-384
     model_type: cls
     use_pretrained: true
+    image_size: 384
     layer_norm_eps: 0.0000001
     dropout_rate: 0.1
     custom_head_types: ['cls'] # ['cls', 'attn', 'avg', 'max', 'conv']
@@ -136,6 +138,7 @@ class MyDataset(Dataset):
     def __init__(self, s: Dict, df: pd.DataFrame, datadir: Path, mode: Mode, *args, **kwargs):
         super().__init__()
         self.st = s['training']
+        sm = s['model']
         self.df = df
         self.images = df[self.st['input_column']].values
         self.labels = None
@@ -145,9 +148,10 @@ class MyDataset(Dataset):
         self.mode = mode
         self.transforms = al.Compose([
             # al.RandomResizedCrop(
-            #     SM['image_size'], SM['image_size'],
+            #     sm['image_size'], sm['image_size'],
             #     scale=(0.1, 1.0)
             # ),
+            al.Resize(sm['image_size'], sm['image_size'], p=1.0),
             # al.Transpose(p=0.5),
             # al.HorizontalFlip(p=0.5),
             # al.VerticalFlip(p=0.5),
@@ -202,8 +206,7 @@ class ModelCustomHeadEnsemble(nn.Module):
         model: PreTrainedModel
     ) -> None:
         super().__init__()
-        self.st = settings['training']
-        self.sm = settings['model']
+        self.sm = settings
         self.model = model
         self.hidden_size = model.config.hidden_size  # type: ignore
         self.num_reinit_layers = self.sm.get('num_reinit_layers', 0)
@@ -325,8 +328,7 @@ class ModelTIMM(nn.Module):
         model: nn.Module
     ) -> None:
         super().__init__()
-        self.st = settings['training']
-        self.sm = settings['model']
+        self.sm = settings
         self.model = model
 
     def forward(self, inputs):
@@ -337,9 +339,12 @@ class ModelTIMM(nn.Module):
 
 def get_model(s: Dict[str, Any]) -> nn.Module:
     model_name_or_path = s['model_name'] if s['use_pretrained'] else s['ckpt_from_dir']
-    hg_model = AutoModel.from_pretrained(model_name_or_path)
-    model = ModelCustomHeadEnsemble(S, hg_model)
-    return model
+    try:
+        _model = AutoModel.from_pretrained(model_name_or_path)
+        return ModelCustomHeadEnsemble(s, _model)
+    except Exception:
+        _model = timm.create_model(s['model_name'], pretrained=s['use_pretrained'], num_classes=1)
+        return ModelTIMM(s, _model)
 
 
 #
@@ -443,6 +448,7 @@ class Trainer:
 
             self.evaluate(valid_dataloader, model, epoch=epoch)
             model.train()
+        self.upload_model(self.fold)
 
     def train_step(
         self,
@@ -529,6 +535,10 @@ class Trainer:
     def save_model(self, model: nn.Module, fold: int) -> None:
         self.ml_logger.save_torch_model(model, f'model_{fold}.pt')
 
+    def upload_model(self, fold: int) -> None:
+        LOGGER.info('Uploding model ...')
+        self.ml_logger.upload_model(f'model_{fold}.pt')
+
     def _log_metric(self, name: str, value: float, step: int, log_interval: Optional[int] = None) -> None:
         if log_interval is None:
             self.ml_logger.log_metric(name, value, step)
@@ -567,9 +577,12 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         val_preds, _ = trainer.validation(valid_dataloader, model)
         score = mean_squared_error(df_valid[st['target_column']].values, val_preds, squared=False)
         LOGGER.info(f'rmse_{fold}: {score}')
-        ml_logger.log_metric(f'rmse_{fold}', score)
+        ml_logger.log_metric(f'metric_{fold}', score)
         oof_preds[df_valid.index] = val_preds
-        model.model.config.save_pretrained(CKPTDIR)  # type: ignore
+        try:
+            model.model.config.save_pretrained(CKPTDIR)  # type: ignore
+        except Exception:
+            pass
         del trainer, model, state_dict, optimizer, scheduler, loss_fn
         del train_ds, valid_ds, train_dataloader, valid_dataloader
         gc.collect()
@@ -578,7 +591,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
             break
 
     score = mean_squared_error(df[st['target_column']].values, oof_preds, squared=False)
-    ml_logger.log_metric('rmse', score)
+    ml_logger.log_metric('metric', score)
     pickle.dump(oof_preds, open(CKPTDIR / 'oof_preds.pkl', 'wb'))
     LOGGER.info(f'training finished. Metric: {score:.3f}')
     return oof_preds

@@ -27,7 +27,7 @@ from mykaggle.trainer.base import Mode
 # Settings
 #
 
-IS_DEBUG = False
+IS_DEBUG = True
 S = yaml.safe_load('''
 name: 'nlp_bert_multiclass_classification'
 competition: sample
@@ -56,7 +56,7 @@ training:
     scheduler: LinearDecayWithWarmUp
     batch_scheduler: true
     max_length: 512
-    warmup_epochs: 0.2
+    warmup_epochs: 0.3
     logger_verbose_step: 10
     ckpt_callback_verbose: true
     val_check_interval: 1000000
@@ -100,7 +100,7 @@ if not CKPTDIR.exists():
 DATASET = load_dataset('glue', 'mnli', cache_dir=str(DATADIR))
 DF_TRAIN = pd.DataFrame(DATASET['train'])  # type: ignore
 if IS_DEBUG:
-    DF_TRAIN = DF_TRAIN.iloc[:1000]
+    DF_TRAIN = DF_TRAIN.iloc[:10000]
 DF_TEST = pd.DataFrame(DATASET['test_matched'])  # type: ignore
 DF_SUB = DF_TEST.copy().drop(['premise', 'hypothesis'], axis=1)
 
@@ -125,7 +125,7 @@ class MyDataset(Dataset):
         self.premises = df[self.st['input_column'][0]].values
         self.hypothesises = df[self.st['input_column'][1]].values
         self.labels = None
-        if self.st['target_column'] in df.columns:
+        if self.st['target_column'] in df.columns and mode != Mode.TEST:
             self.labels = df[self.st['target_column']].values
             self.labels = torch.eye(s['model']['num_classes'])[self.labels]
         self.tokenizer = tokenizer
@@ -199,13 +199,13 @@ class ModelCustomHeadEnsemble(nn.Module):
             hidden_dim = self.sm.get('conv_head_hidden_dim', 256)
             kernel_size = self.sm.get('conv_head_kernel_size', 2)
             self.conv1 = nn.Conv1d(self.hidden_size, hidden_dim, kernel_size=kernel_size, padding=1)
-            self.conv2 = nn.Conv1d(hidden_dim, 1, kernel_size=kernel_size, padding=1)
+            self.conv2 = nn.Conv1d(hidden_dim, self.sm['num_classes'], kernel_size=kernel_size, padding=1)
         if 'layers_sum' in self.head_types:
             self.layer_weight = nn.Parameter(torch.tensor([1] * self.num_use_layers, dtype=torch.float))
 
         for head in self.head_types:
             if 'concat' in head:
-                output_layers[head] = nn.Linear(self.hidden_size * self.num_use_layers, 1)
+                output_layers[head] = nn.Linear(self.hidden_size * self.num_use_layers, self.sm['num_classes'])
             elif head == 'conv':
                 continue
             else:
@@ -406,6 +406,7 @@ class Trainer:
 
             self.evaluate(valid_dataloader, model, epoch=epoch)
             model.train()
+        self.upload_model(self.fold)
 
     def train_step(
         self,
@@ -493,6 +494,10 @@ class Trainer:
     def save_model(self, model: nn.Module, fold: int) -> None:
         self.ml_logger.save_torch_model(model, f'model_{fold}.pt')
 
+    def upload_model(self, fold: int) -> None:
+        LOGGER.info('Uploding model ...')
+        self.ml_logger.upload_model(f'model_{fold}.pt')
+
     def _log_metric(self, name: str, value: float, step: int, log_interval: Optional[int] = None) -> None:
         if log_interval is None:
             self.ml_logger.log_metric(name, value, step)
@@ -532,7 +537,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         val_preds, _ = trainer.validation(valid_dataloader, model)
         score = accuracy_score(df_valid[st['target_column']].values, np.argmax(val_preds, -1))
         LOGGER.info(f'acc_{fold}: {score}')
-        ml_logger.log_metric(f'acc_{fold}', score)
+        ml_logger.log_metric(f'metric_{fold}', score)
         oof_preds[df_valid.index, :] = val_preds
         model.model.config.save_pretrained(CKPTDIR)  # type: ignore
         del trainer, model, state_dict, optimizer, scheduler, loss_fn
@@ -542,8 +547,8 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         if ST.get('use_only_fold', False):
             break
 
-    score = accuracy_score(df['target'].values, np.argmax(oof_preds, -1))
-    ml_logger.log_metric('acc', score)
+    score = accuracy_score(df[st['target_column']].values, np.argmax(oof_preds, -1))
+    ml_logger.log_metric('metric', score)
     pickle.dump(oof_preds, open(CKPTDIR / 'oof_preds.pkl', 'wb'))
     LOGGER.info(f'training finished. Metric: {score:.3f}')
     return oof_preds
@@ -580,7 +585,7 @@ def predict(
 def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.DataFrame):
     bs = s['training']['test_batch_size']
     use_amp = s['training']['use_amp']
-    num_classes = s['training']['num_classes']
+    num_classes = s['model']['num_classes']
     preds = predict(model, df, dataloader, bs, num_classes, use_amp)
     return preds
 
@@ -588,7 +593,7 @@ def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.Dat
 def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
-    tokenizer = AutoTokenizer.from_pretrained(CKPTDIR)
+    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
     test_preds = np.zeros((len(df), sm['num_classes']))
     for fold in range(st['num_folds']):
         ds = MyDataset(s, df, tokenizer, Mode.TEST, fold)
@@ -604,7 +609,7 @@ def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
 
 
 def submit(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame, preds: np.ndarray) -> None:
-    df[s['training']['target_column']] = preds
+    df[s['training']['target_column']] = np.argmax(preds, -1)
     df.to_csv(CKPTDIR / 'submission.csv', index=False)
 
 
