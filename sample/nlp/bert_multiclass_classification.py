@@ -199,13 +199,13 @@ class ModelCustomHeadEnsemble(nn.Module):
             hidden_dim = self.sm.get('conv_head_hidden_dim', 256)
             kernel_size = self.sm.get('conv_head_kernel_size', 2)
             self.conv1 = nn.Conv1d(self.hidden_size, hidden_dim, kernel_size=kernel_size, padding=1)
-            self.conv2 = nn.Conv1d(hidden_dim, 1, kernel_size=kernel_size, padding=1)
+            self.conv2 = nn.Conv1d(hidden_dim, self.sm['num_classes'], kernel_size=kernel_size, padding=1)
         if 'layers_sum' in self.head_types:
             self.layer_weight = nn.Parameter(torch.tensor([1] * self.num_use_layers, dtype=torch.float))
 
         for head in self.head_types:
             if 'concat' in head:
-                output_layers[head] = nn.Linear(self.hidden_size * self.num_use_layers, 1)
+                output_layers[head] = nn.Linear(self.hidden_size * self.num_use_layers, self.sm['num_classes'])
             elif head == 'conv':
                 continue
             else:
@@ -585,7 +585,7 @@ def predict(
 def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.DataFrame):
     bs = s['training']['test_batch_size']
     use_amp = s['training']['use_amp']
-    num_classes = s['training']['num_classes']
+    num_classes = s['model']['num_classes']
     preds = predict(model, df, dataloader, bs, num_classes, use_amp)
     return preds
 
@@ -593,7 +593,7 @@ def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.Dat
 def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
-    tokenizer = AutoTokenizer.from_pretrained(CKPTDIR)
+    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
     test_preds = np.zeros((len(df), sm['num_classes']))
     for fold in range(st['num_folds']):
         ds = MyDataset(s, df, tokenizer, Mode.TEST, fold)
@@ -609,7 +609,7 @@ def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
 
 
 def submit(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame, preds: np.ndarray) -> None:
-    df[s['training']['target_column']] = preds
+    df[s['training']['target_column']] = np.argmax(preds, -1)
     df.to_csv(CKPTDIR / 'submission.csv', index=False)
 
 

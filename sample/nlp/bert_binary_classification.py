@@ -98,9 +98,10 @@ if not CKPTDIR.exists():
 
 
 DF_TRAIN = pd.read_csv(DATADIR / ST['train_file'])
+DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
 if IS_DEBUG:
     DF_TRAIN = DF_TRAIN.iloc[:10000]
-DF_TEST = pd.read_csv(DATADIR / ST['test_file'])
+    DF_TEST = DF_TEST.iloc[:10000]
 DF_SUB = pd.read_csv(DATADIR / 'sample_submission.csv')
 
 FOLD_COLUMN = 'fold'
@@ -110,7 +111,6 @@ if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_cv']:
     cv = CVStrategy.create(ST['cv'], ST['num_folds'])
     DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column=ST['target_column'])
 LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
-
 
 #
 # Dataset and Dataloader
