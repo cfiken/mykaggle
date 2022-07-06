@@ -177,18 +177,23 @@ class MLLogger:
         self,
         model,
         filename: str = 'model',
-        artifact_path: Optional[str] = None
+        artifact_path: Optional[str] = None,
+        upload: bool = False
     ):
         if isinstance(model, nn.Module):
-            self.save_torch_model(model, filename, artifact_path)
+            self.save_torch_model(model, filename, artifact_path, upload)
         else:
-            self.save_tf_model(model, filename, artifact_path)
+            self.save_tf_model(model, filename, artifact_path, upload)
+
+    def upload_model(self, filename: str, artifact_path: Optional[str] = None) -> None:
+        self.log_artifact(str(self._logdir / filename), artifact_path=artifact_path)
 
     def save_tf_model(
         self,
         model,
         filename: str = 'model',
-        artifact_path: Optional[str] = None
+        artifact_path: Optional[str] = None,
+        upload: bool = False
     ) -> None:
         '''
         モデルをローカルに保存しつつ、artifacts として mlflow に保存します。
@@ -197,9 +202,16 @@ class MLLogger:
         '''
         model.save_weights(str(self._logdir / filename))
         if OutputType.MLFLOW in self._output_types:
-            self.log_artifacts(str(self._logdir), artifact_path=artifact_path)
+            if upload:
+                self.log_artifacts(str(self._logdir), artifact_path=artifact_path)
 
-    def save_torch_model(self, model: nn.Module, filename: str = 'model', artifact_path: Optional[str] = None) -> None:
+    def save_torch_model(
+        self,
+        model: nn.Module,
+        filename: str = 'model',
+        artifact_path: Optional[str] = None,
+        upload: bool = False
+    ) -> None:
         '''
         モデルをローカルに保存しつつ、artifacts として mlflow に保存します。
         :param model: モデル
@@ -207,7 +219,8 @@ class MLLogger:
         '''
         torch.save(model.state_dict(), str(self._logdir / filename))
         if OutputType.MLFLOW in self._output_types:
-            self.log_artifacts(str(self._logdir), artifact_path=artifact_path)
+            if upload:
+                self.log_artifacts(str(self._logdir), artifact_path=artifact_path)
 
     def log_user(self, user: str) -> None:
         '''

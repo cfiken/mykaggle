@@ -19,6 +19,7 @@ from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_wi
 from fastprogress.fastprogress import master_bar, progress_bar
 import albumentations as al
 from albumentations.pytorch import ToTensorV2
+import timm
 
 from mykaggle.lib.ml_logger import MLLogger
 from mykaggle.lib.routine import fix_seed, get_logger, parse
@@ -136,6 +137,7 @@ class MyDataset(Dataset):
     def __init__(self, s: Dict, df: pd.DataFrame, datadir: Path, mode: Mode, *args, **kwargs):
         super().__init__()
         self.st = s['training']
+        sm = s['model']
         self.df = df
         self.images = df[self.st['input_column']].values
         self.labels = None
@@ -145,9 +147,10 @@ class MyDataset(Dataset):
         self.mode = mode
         self.transforms = al.Compose([
             # al.RandomResizedCrop(
-            #     SM['image_size'], SM['image_size'],
+            #     sm['image_size'], sm['image_size'],
             #     scale=(0.1, 1.0)
             # ),
+            al.Resize(sm['image_size'], sm['image_size']),
             # al.Transpose(p=0.5),
             # al.HorizontalFlip(p=0.5),
             # al.VerticalFlip(p=0.5),
@@ -337,8 +340,12 @@ class ModelTIMM(nn.Module):
 
 def get_model(s: Dict[str, Any]) -> nn.Module:
     model_name_or_path = s['model_name'] if s['use_pretrained'] else s['ckpt_from_dir']
-    hg_model = AutoModel.from_pretrained(model_name_or_path)
-    model = ModelCustomHeadEnsemble(S, hg_model)
+    try:
+        _model = AutoModel.from_pretrained(model_name_or_path)
+        model = ModelCustomHeadEnsemble(S, _model)
+    except Exception:
+        _model = timm.create_model(s['model_name'], pretrained=s['use_pretrained'], num_classes=1)
+        model = ModelTIMM(s, _model)
     return model
 
 
@@ -443,6 +450,7 @@ class Trainer:
 
             self.evaluate(valid_dataloader, model, epoch=epoch)
             model.train()
+        self.upload_model(self.fold)
 
     def train_step(
         self,
@@ -529,6 +537,10 @@ class Trainer:
     def save_model(self, model: nn.Module, fold: int) -> None:
         self.ml_logger.save_torch_model(model, f'model_{fold}.pt')
 
+    def upload_model(self, fold: int) -> None:
+        LOGGER.info('Uploding model ...')
+        self.ml_logger.upload_model(f'model_{fold}.pt')
+
     def _log_metric(self, name: str, value: float, step: int, log_interval: Optional[int] = None) -> None:
         if log_interval is None:
             self.ml_logger.log_metric(name, value, step)
@@ -567,7 +579,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         val_preds, _ = trainer.validation(valid_dataloader, model)
         score = mean_squared_error(df_valid[st['target_column']].values, val_preds, squared=False)
         LOGGER.info(f'rmse_{fold}: {score}')
-        ml_logger.log_metric(f'rmse_{fold}', score)
+        ml_logger.log_metric(f'metric_{fold}', score)
         oof_preds[df_valid.index] = val_preds
         model.model.config.save_pretrained(CKPTDIR)  # type: ignore
         del trainer, model, state_dict, optimizer, scheduler, loss_fn
@@ -578,7 +590,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
             break
 
     score = mean_squared_error(df[st['target_column']].values, oof_preds, squared=False)
-    ml_logger.log_metric('rmse', score)
+    ml_logger.log_metric('metric', score)
     pickle.dump(oof_preds, open(CKPTDIR / 'oof_preds.pkl', 'wb'))
     LOGGER.info(f'training finished. Metric: {score:.3f}')
     return oof_preds

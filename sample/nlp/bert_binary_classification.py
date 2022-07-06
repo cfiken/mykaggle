@@ -27,7 +27,7 @@ from mykaggle.trainer.base import Mode
 # Settings
 #
 
-IS_DEBUG = False
+IS_DEBUG = True
 S = yaml.safe_load('''
 name: 'nlp_bert_binary_classification'
 competition: sample
@@ -48,7 +48,7 @@ training:
     cv: stratified
     train_only_fold:
     learning_rate: 0.00003
-    num_epochs: 1
+    num_epochs: 3
     batch_size: 16
     test_batch_size: 16
     num_accumulations: 2
@@ -56,10 +56,10 @@ training:
     scheduler: LinearDecayWithWarmUp
     batch_scheduler: true
     max_length: 512
-    warmup_epochs: 0.1
+    warmup_epochs: 0.3
     logger_verbose_step: 10
     ckpt_callback_verbose: true
-    val_check_interval: 10000
+    val_check_interval: 1000000
     optimizer: AdamW
     weight_decay: 0.0
     loss: ce
@@ -403,6 +403,7 @@ class Trainer:
 
             self.evaluate(valid_dataloader, model, epoch=epoch)
             model.train()
+        self.upload_model(self.fold)
 
     def train_step(
         self,
@@ -491,6 +492,10 @@ class Trainer:
     def save_model(self, model: nn.Module, fold: int) -> None:
         self.ml_logger.save_torch_model(model, f'model_{fold}.pt')
 
+    def upload_model(self, fold: int) -> None:
+        LOGGER.info('Uploding model ...')
+        self.ml_logger.upload_model(f'model_{fold}.pt')
+
     def _log_metric(self, name: str, value: float, step: int, log_interval: Optional[int] = None) -> None:
         if log_interval is None:
             self.ml_logger.log_metric(name, value, step)
@@ -530,7 +535,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         val_preds, _ = trainer.validation(valid_dataloader, model)
         score = roc_auc_score(df_valid[st['target_column']].values, val_preds)
         LOGGER.info(f'auc_{fold}: {score}')
-        ml_logger.log_metric(f'auc_{fold}', score)
+        ml_logger.log_metric(f'metric_{fold}', score)
         oof_preds[df_valid.index] = val_preds
         model.model.config.save_pretrained(CKPTDIR)  # type: ignore
         del trainer, model, state_dict, optimizer, scheduler, loss_fn
@@ -541,7 +546,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
             break
 
     score = roc_auc_score(df[st['target_column']].values, oof_preds)
-    ml_logger.log_metric('auc', score)
+    ml_logger.log_metric('metric', score)
     pickle.dump(oof_preds, open(CKPTDIR / 'oof_preds.pkl', 'wb'))
     LOGGER.info(f'training finished. Metric: {score:.3f}')
     return oof_preds
