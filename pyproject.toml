@@ -29,9 +29,11 @@ boto3 = "^1.17.23"
 types-PyYAML = "^5.4.6"
 types-requests = "^2.25.6"
 category-encoders = "^2.5.0"
-#torch = {url = "https://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp38-cp38-linux_x86_64.whl"}
-#torch = { version = "=1.11.0+cu113", source = "pytorch-cu113" }
-#torchvision = { version = "=0.12.0+cu113", source = "pytorch-cu113" }
+# pytorch は環境に応じて入れ方変えるため一律コメントアウト
+# torch = "^1.12.0"
+# torch = { version = "=1.11.0+cu113", source = "pytorch-cu113" }
+# torchvision = "*"
+# torchvision = { version = "=0.12.0+cu113", source = "pytorch-cu113" }
 protobuf = "^3.20.0"
 opencv-python = "^4.6.0.66"
 albumentations = "^1.2.0"
