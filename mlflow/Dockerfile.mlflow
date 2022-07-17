@@ -34,39 +34,33 @@ RUN groupadd -g 1000 -r $GROUP \
 RUN apt-get update && apt-get install -y \
     zsh curl git \
     build-essential \
-#     libbz2-dev \
-#     libcupti-dev \
-#     libffi-dev \
-#     liblzma-dev \
+    libbz2-dev \
+    libcupti-dev \
+    libffi-dev \
+    liblzma-dev \
     libreadline-dev \
-#     libsqlite3-dev \
-    libmysqlclient-dev \
+    libsqlite3-dev \
+    default-libmysqlclient-dev \
     libssl-dev \
-#     pkg-config \
-#     zlib1g-dev \
+    pkg-config \
+    zlib1g-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 USER $USER
 WORKDIR $HOME
 
-SHELL ["/bin/zsh", "-c"]
-
-#
-# Shell
+# User settings
+COPY --chown=$USER:$GROUP .zshenv ./
 RUN echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.zshenv \
   && echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.zshenv \
   && echo 'if command -v pyenv 1>/dev/null 2>&1; then\n  eval "$(pyenv init -)"\nfi' >> ~/.zshenv
-# SHELL ["/usr/bin/zsh", "-c"]
-
-# User settings
-# RUN mkdir -p ~/.ssh \
-#   && ssh-keyscan github.com >> .ssh/known_hosts
 
 # Python
 ENV PYTHON_VERSION=3.10.4
 RUN git clone https://github.com/pyenv/pyenv.git .pyenv \
   && git clone https://github.com/pyenv/pyenv-virtualenv.git .pyenv/plugins/pyenv-virtualenv \
+  && . ~/.zshenv \
   && pyenv init - >> ~/.zshenv \
   && pyenv install $PYTHON_VERSION \
   && pyenv global $PYTHON_VERSION \
@@ -77,6 +71,8 @@ USER $USER
 WORKDIR /app
 
 # Specific
-RUN pip install mlflow boto3 mysqlclient
+RUN . ~/.zshenv && pip install mlflow boto3 mysqlclient
+COPY --chown=$USER:$GROUP docker_entrypoint.sh /
 
-CMD mlflow server -h 0.0.0.0 -p 5000 --default-artifact-root s3://cfiken-kaggle/mlflow --backend-store-uri mysql://${DB_USER}:${DB_PASS}@${DB_HOST}:3306/mlflow
+ENTRYPOINT ["/docker_entrypoint.sh"]
+# CMD mlflow server -h 0.0.0.0 -p 5000 --default-artifact-root s3://cfiken-kaggle/mlflow --backend-store-uri $BACKEND_URI
