@@ -3,7 +3,7 @@
 version: "3.7"
 services:
   mykaggle:
-    image: cfiken/mykaggle:cu113
+    image: cfiken/mykaggle:cu117
     shm_size: '256gb'
     command: ["poetry", "run", "jupyter", "lab", "--port", "8888", "--config", "jupyter_notebook_config.py"]
     container_name: mykaggle
