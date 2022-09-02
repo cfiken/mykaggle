@@ -15,6 +15,7 @@ jobs:
           name: install dependencies
           command: |
             poetry install 
+          no_output_timeout: 30m
       - run:
           name: install torch
           command: |
