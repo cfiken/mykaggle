@@ -1,7 +1,7 @@
 # 機械学習コンペ向け環境
-# docker build -f Dockerfile -t cfiken/mykaggle:cu113 .
+# docker build -f Dockerfile -t cfiken/mykaggle:cu117 .
 # 
-FROM nvidia/cuda:11.4.0-cudnn8-devel-ubuntu20.04
+FROM nvidia/cuda:11.7.1-cudnn8-devel-ubuntu20.04
 
 # 時刻・言語環境設定に必要最小限の apt
 # Add ASIA/TOKYO time zone
