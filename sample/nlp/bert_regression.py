@@ -40,7 +40,7 @@ training:
     num_gpus: 1
     train_file: train.csv
     test_file: test.csv
-    input_column: question_text
+    input_column: excerpt
     target_column: target
     num_folds: 5
     do_cv: true
