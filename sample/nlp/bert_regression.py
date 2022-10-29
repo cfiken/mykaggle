@@ -85,7 +85,7 @@ SM = S['model']
 
 fix_seed()
 LOGGER = get_logger(__name__)
-DATADIR = Path('./data/quora/')
+DATADIR = Path('./data/commonlit/')
 CKPTDIR = Path('./ckpt/') / S['name']
 if not CKPTDIR.exists():
     CKPTDIR.mkdir()
