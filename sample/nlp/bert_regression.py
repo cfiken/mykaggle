@@ -109,7 +109,8 @@ FOLD_COLUMN = 'fold'
 if FOLD_COLUMN not in DF_TRAIN.columns or ST['do_cv']:
     from mykaggle.trainer.cv_strategy import CVStrategy
     cv = CVStrategy.create(ST['cv'], ST['num_folds'])
-    DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column=ST['target_column'])
+    DF_TRAIN['target_bin'] = pd.cut(DF_TRAIN[ST['target_column']], 5, labels=False)
+    DF_TRAIN = cv.split_and_set(DF_TRAIN, y_column='target_bin')
 LOGGER.info(f'Training data: {len(DF_TRAIN)}, Test data: {len(DF_TEST)}')
 
 #
