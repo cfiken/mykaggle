@@ -13,3 +13,5 @@ sed -i -e "s/container_name: mykaggle/container_name: $1/g" ./docker-compose.yml
 sed -i -e "s/docker-compose run --rm mykaggle/docker-compose run --rm $1/g" ./script/setup_kaggle_dataset.sh
 sed -i -e "s/docker-compose run --rm mykaggle/docker-compose run --rm $1/g" ./script/setup_torch.sh
 sed -i -e "s/docker-compose run --rm mykaggle/docker-compose run --rm $1/g" ./script/upload_ckpt.sh
+sed -i -e "s/git-mykaggle/git-mykaggle-$1/g" ./kaggle_datasets_git/dataset-metadata.json
+sed -i -e "s/ckpt-mykaggle/ckpt-mykaggle-$1/g" ./kaggle_datasets_ckpt/dataset-metadata.json
