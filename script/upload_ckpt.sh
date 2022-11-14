@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Upload ckpt files to kaggle datasets
-# run this in repository root: ./script/upload_data.sh "version message"
+# run this in repository root: ./script/upload_ckpt.sh "version message"
 
 if [ $# -ne 1 ]; then
   echo "Message is needed as args like:"
