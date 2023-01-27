@@ -4,7 +4,7 @@ version: 2.1
 jobs:
   test:
     docker:
-      - image: cfiken/mykaggle:cu112
+      - image: cfiken/python
     working_directory: ~/repo
     steps:
       - checkout
