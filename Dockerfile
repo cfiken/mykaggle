@@ -69,7 +69,7 @@ RUN eval "$(pyenv init -)" \
   && pyenv install $PYTHON_VERSION \
   && pyenv global $PYTHON_VERSION \
   && pyenv rehash \
-  && curl -sSL https://install.python-poetry.org | python - --version 1.2.0a2 \
+  && curl -sSL https://install.python-poetry.org | python \
   && rm -rf $HOME/.cache
 
 USER $USER
