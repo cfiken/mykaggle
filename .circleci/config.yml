@@ -38,7 +38,7 @@ jobs:
             poetry run mypy ./ --ignore-missing
   kaggle:
     docker:
-      - image: cfiken/mykaggle:cu113
+      - image: cfiken/mykaggle:cu117
     working_directory: ~/repo
     steps:
       - checkout

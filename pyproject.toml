@@ -14,12 +14,6 @@ pillow = "*"
 pandas = "*"
 seaborn = "*"
 lightgbm = "*"
-xgboost = "*"
-catboost = "*"
-# tensorflow = "2.2.1"
-# tensorflow-addons = "*"
-# tensorflow-datasets = "*"
-transformers = "*"
 fastprogress = "*"
 kaggle = "*"
 pyyaml = "*"
@@ -29,19 +23,24 @@ boto3 = "^1.17.23"
 types-PyYAML = "^5.4.6"
 types-requests = "^2.25.6"
 category-encoders = "^2.5.0"
+protobuf = "^3.20.0"
+opencv-python = "^4.6.0.66"
+pyarrow = "^8.0.0"
+datasets = "^2.3.2"
+fsspec = "^2022.5.0"
+
+[tool.poetry.group.full.dependencies]
 # pytorch は環境に応じて入れ方変えるため一律コメントアウト
 # torch = "^1.12.0"
 # torch = { version = "=1.11.0+cu113", source = "pytorch-cu113" }
 # torchvision = "*"
 # torchvision = { version = "=0.12.0+cu113", source = "pytorch-cu113" }
-protobuf = "^3.20.0"
-opencv-python = "^4.6.0.66"
-albumentations = "^1.2.0"
-pyarrow = "^8.0.0"
-datasets = "^2.3.2"
-sentencepiece = "^0.1.96"
-fsspec = "^2022.5.0"
+xgboost = "*"
+catboost = "*"
 timm = "^0.5.4"
+transformers = "*"
+sentencepiece = "^0.1.96"
+albumentations = "^1.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"
@@ -52,9 +51,4 @@ autopep8 = "*"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-#[[tool.poetry.source]]
-#name = "pytorch-cu113"
-# url = "https://download.pytorch.org/whl/cu113/"
-# secondary = true
 
