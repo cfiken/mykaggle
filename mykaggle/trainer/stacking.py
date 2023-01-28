@@ -5,7 +5,6 @@ import gc
 import numpy as np
 import pandas as pd
 import torch
-from torch import nn
 
 from mykaggle.util.logger import get_logger
 from mykaggle.trainer.base import Mode
