@@ -12,5 +12,5 @@ fi
 if test $CI; then
     poetry run kaggle datasets version -p ./kaggle_datasets_ckpt -r zip -m $1
 else
-    docker-compose run --rm mykaggle poetry run kaggle datasets version -p ./kaggle_datasets_ckpt -r zip -m $1
+    docker compose run --rm mykaggle poetry run kaggle datasets version -p ./kaggle_datasets_ckpt -r zip -m $1
 fi

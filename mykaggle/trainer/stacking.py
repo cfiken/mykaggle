@@ -19,7 +19,7 @@ from mykaggle.dataloader.dataloader import get_dataloader
 LOGGER = get_logger(__name__)
 
 
-def get_stacking_model(settings: Dict[str, Any]) -> nn.Module:
+def get_stacking_model(settings: Dict[str, Any]):
     pass
 
 

@@ -1,8 +1,8 @@
 #!/bin/sh
 
 echo "########## run flake8 ##########"
-docker-compose run --rm mykaggle poetry run flake8
+docker compose run --rm mykaggle poetry run flake8
 echo "########## run mypy   ##########"
-docker-compose run --rm mykaggle poetry run mypy ./
+docker compose run --rm mykaggle poetry run mypy ./
 echo "########## run pytest ##########"
-CUDA_VISIBLE_DEVICES='' docker-compose run --rm mykaggle poetry run pytest
+CUDA_VISIBLE_DEVICES='' docker compose run --rm mykaggle poetry run pytest

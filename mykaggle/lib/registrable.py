@@ -17,7 +17,12 @@ class Registrable:
     default_implementation: Optional[str] = None
 
     @classmethod
-    def register(cls: Type[T], name: str, constructor: str = None, exist_ok: bool = False):
+    def register(
+        cls: Type[T],
+        name: str,
+        constructor: Optional[str] = None,
+        exist_ok: Optional[bool] = False
+    ):
         '''
         Register a class under a particular name.
         Args:
