@@ -50,6 +50,13 @@ flake8 = "*"
 mypy = "*"
 autopep8 = "*"
 
+[tool.mypy]
+ignore_missing_imports = true
+exclude = [
+  'jupyter_notebook_config\.py$',
+  'mykaggle/lib/ml_logger\.py$',
+]
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
