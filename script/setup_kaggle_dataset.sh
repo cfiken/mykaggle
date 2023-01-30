@@ -13,6 +13,6 @@ if test $CI; then
     poetry run kaggle datasets create -p ./kaggle_datasets_ckpt -r zip
     poetry run kaggle datasets create -p ./kaggle_datasets_git -r zip
 else
-    docker-compose run --rm mykaggle poetry run kaggle datasets create -p ./kaggle_datasets_ckpt -r zip
-    docker-compose run --rm mykaggle poetry run kaggle datasets create -p ./kaggle_datasets_git -r zip
+    docker compose run --rm mykaggle poetry run kaggle datasets create -p ./kaggle_datasets_ckpt -r zip
+    docker compose run --rm mykaggle poetry run kaggle datasets create -p ./kaggle_datasets_git -r zip
 fi

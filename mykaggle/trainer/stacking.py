@@ -5,7 +5,6 @@ import gc
 import numpy as np
 import pandas as pd
 import torch
-from torch import nn
 
 from mykaggle.util.logger import get_logger
 from mykaggle.trainer.base import Mode
@@ -19,7 +18,7 @@ from mykaggle.dataloader.dataloader import get_dataloader
 LOGGER = get_logger(__name__)
 
 
-def get_stacking_model(settings: Dict[str, Any]) -> nn.Module:
+def get_stacking_model(settings: Dict[str, Any]):
     pass
 
 

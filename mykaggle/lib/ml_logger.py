@@ -5,10 +5,10 @@ import contextlib
 from enum import Enum
 import json
 import yaml
+import mlflow
 import torch
 from torch import nn
 import numpy as np
-import mlflow
 import dotenv
 try:
     import tensorflow as tf

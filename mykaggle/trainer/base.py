@@ -1,4 +1,5 @@
 from typing import Tuple
+from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 import numpy as np
@@ -35,6 +36,7 @@ class TrainingStates:
 
 
 class TrainerBase:
+    @abstractmethod
     def train(
         self,
         train_dataloader: DataLoader,
@@ -47,6 +49,7 @@ class TrainerBase:
     ) -> np.ndarray:
         pass
 
+    @abstractmethod
     def validation(
         self,
         dataloader: DataLoader,

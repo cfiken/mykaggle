@@ -4,7 +4,7 @@ version: 2.1
 jobs:
   test:
     docker:
-      - image: cfiken/mykaggle:cu117
+      - image: cfiken/python
     working_directory: ~/repo
     steps:
       - checkout
@@ -14,7 +14,7 @@ jobs:
       - run:
           name: install dependencies
           command: |
-            poetry install 
+            poetry install --no-ansi
           no_output_timeout: 30m
       - run:
           name: install torch
@@ -38,7 +38,7 @@ jobs:
             poetry run mypy ./ --ignore-missing
   kaggle:
     docker:
-      - image: cfiken/mykaggle:cu113
+      - image: cfiken/python
     working_directory: ~/repo
     steps:
       - checkout
