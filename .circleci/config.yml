@@ -48,7 +48,7 @@ jobs:
       - run:
           name: install dependencies
           command: |
-            poetry install 
+            poetry install --no-ansi
       - run:
           name: zip source
           command: |
