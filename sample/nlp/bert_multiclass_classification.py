@@ -13,7 +13,7 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import _LRScheduler
-from transformers import AutoTokenizer, AutoModel, PreTrainedTokenizer, PreTrainedModel
+from transformers import AutoConfig, AutoTokenizer, AutoModel, PreTrainedTokenizer, PreTrainedModel
 from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 from datasets import load_dataset
 from fastprogress.fastprogress import master_bar, progress_bar
@@ -298,9 +298,23 @@ class ModelCustomHeadEnsemble(nn.Module):
                 module.bias.data.zero_()
 
 
-def get_model(s: Dict[str, Any]) -> nn.Module:
-    model_name_or_path = s['model_name'] if s['use_pretrained'] else s['ckpt_from_dir']
-    hg_model = AutoModel.from_pretrained(model_name_or_path)
+def get_model(model_name: str, use_pretrained: bool = True, ckpt_dir: Path = CKPTDIR) -> nn.Module:
+    '''
+    特定の形式のモデル（BERT, RoBERTa等）を次のどちらかで作成する
+    1. HuggingFace 等に上がっている pretrained parameters で初期化
+    2. random initialized parameters
+    2を選択する場合、モデル構造の json ファイルが必要になる。該当ファイルがない場合、ダウンロードを挟む。
+    Args:
+        use_pretrained: 1 or 2 を決める
+        ckpt_dir: config.json のあるディレクトリ
+    '''
+    if use_pretrained:
+        hg_model = AutoModel.from_pretrained(model_name)
+    else:
+        config_path = Path(ckpt_dir / 'config.json')
+        if not config_path.exists():
+            AutoConfig.from_pretrained(model_name).save_pretrained(ckpt_dir)
+        hg_model = AutoModel.from_config(AutoConfig.from_pretrained(ckpt_dir / 'config.json'))
     model = ModelCustomHeadEnsemble(S, hg_model)
     return model
 
@@ -511,6 +525,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     ml_logger.log_params(st)
     ml_logger.log_params(sm)
     tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
+    tokenizer.save_pretrained(CKPTDIR)
     oof_preds = np.zeros((df.shape[0], sm['num_classes']))
 
     for fold in range(st['num_folds']):
@@ -593,12 +608,16 @@ def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.Dat
 def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
-    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(CKPTDIR)
+    except Exception:
+        tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
+        tokenizer.save_pretrained(CKPTDIR)
     test_preds = np.zeros((len(df), sm['num_classes']))
     for fold in range(st['num_folds']):
         ds = MyDataset(s, df, tokenizer, Mode.TEST, fold)
         dataloader = get_dataloader(ds, st['test_batch_size'], st['num_workers'], Mode.TEST)
-        model = get_model(sm)
+        model = get_model(sm, use_pretrained=False)
         model.load_state_dict(torch.load(CKPTDIR / f'model_{fold}.pt'))
         preds = test(s, model, dataloader, df)
         test_preds += preds / st['num_folds']
