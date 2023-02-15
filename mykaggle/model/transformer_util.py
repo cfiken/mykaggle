@@ -35,7 +35,7 @@ class PositionEncode2D(nn.Module):
         d = torch.exp(torch.arange(0., dim, 2) * -(math.log(10000.0) / dim))
         position_w = torch.arange(0., width).unsqueeze(1)
         position_h = torch.arange(0., height).unsqueeze(1)
-        pos = torch.zeros(1, dim*2, height, width)
+        pos = torch.zeros(1, dim * 2, height, width)
 
         pos[0, 0:dim:2, :, :] = torch.sin(position_w * d).transpose(0, 1).unsqueeze(1).repeat(1, 1, height, 1)
         pos[0, 1:dim:2, :, :] = torch.cos(position_w * d).transpose(0, 1).unsqueeze(1).repeat(1, 1, height, 1)

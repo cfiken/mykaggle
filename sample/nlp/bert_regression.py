@@ -1,4 +1,17 @@
 import os
+import sys
+
+IS_DEBUG = True
+IS_KAGGLE = False
+
+if IS_KAGGLE:
+    package_paths = [
+        '/kaggle/input/git-mykaggle/mykaggle/'
+    ]
+
+    for pth in package_paths:
+        sys.path.append(pth)
+
 from typing import Any, Optional, Dict, Tuple
 from pathlib import Path
 import gc
@@ -13,11 +26,10 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import _LRScheduler
-from transformers import AutoTokenizer, AutoModel, PreTrainedTokenizer, PreTrainedModel
+from transformers import AutoConfig, AutoTokenizer, AutoModel, PreTrainedTokenizer, PreTrainedModel
 from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 from fastprogress.fastprogress import master_bar, progress_bar
 
-from mykaggle.lib.ml_logger import MLLogger
 from mykaggle.lib.routine import fix_seed, get_logger, parse
 from mykaggle.model.common import AttentionHead
 from mykaggle.trainer.base import Mode
@@ -29,7 +41,7 @@ from mykaggle.trainer.base import Mode
 IS_DEBUG = True
 S = yaml.safe_load('''
 name: 'nlp_bert_regression'
-competition: sample
+competition: test
 do_training: true
 do_inference: true
 do_submit: true
@@ -85,10 +97,23 @@ SM = S['model']
 
 fix_seed()
 LOGGER = get_logger(__name__)
-DATADIR = Path('./data/commonlit/')
-CKPTDIR = Path('./ckpt/') / S['name']
-if not CKPTDIR.exists():
-    CKPTDIR.mkdir()
+
+if not IS_KAGGLE:
+    from mykaggle.lib.ml_logger import MLLogger
+    torch.multiprocessing.set_sharing_strategy('file_system')
+else:
+    MLLogger = Any  # type: ignore
+
+if IS_KAGGLE:
+    DATADIR = Path('/kaggle/input/') / S["competition"]
+    CKPTDIR = Path('/kaggle/input/ckpt-mykaggle/') / S['name']
+    OUTPUTDIR = Path('/kaggle/working')
+else:
+    DATADIR = Path('./data/quora/')
+    CKPTDIR = Path('./ckpt/') / S['name']
+    OUTPUTDIR = CKPTDIR
+    if not CKPTDIR.exists():
+        CKPTDIR.mkdir()
 
 
 #
@@ -295,9 +320,24 @@ class ModelCustomHeadEnsemble(nn.Module):
                 module.bias.data.zero_()
 
 
-def get_model(s: Dict[str, Any]) -> nn.Module:
-    model_name_or_path = s['model_name'] if s['use_pretrained'] else s['ckpt_from_dir']
-    hg_model = AutoModel.from_pretrained(model_name_or_path)
+def get_model(model_name: str, use_pretrained: bool = True, ckpt_dir: Path = CKPTDIR) -> nn.Module:
+    '''
+    特定の形式のモデル（BERT, RoBERTa等）を次のどちらかで作成する
+    1. HuggingFace 等に上がっている pretrained parameters で初期化
+    2. random initialized parameters
+    2を選択する場合、モデル構造の json ファイルが必要になる。該当ファイルがない場合、ダウンロードを挟む。
+    Args:
+        use_pretrained: 1 or 2 を決める
+        ckpt_dir: config.json のあるディレクトリ
+    '''
+    if use_pretrained:
+        hg_model = AutoModel.from_pretrained(model_name)
+    else:
+        config_path = Path(ckpt_dir / 'config.json')
+        if not config_path.exists():
+            AutoConfig.from_pretrained(model_name).save_pretrained(OUTPUTDIR)
+            ckpt_dir = OUTPUTDIR
+        hg_model = AutoModel.from_config(AutoConfig.from_pretrained(ckpt_dir / 'config.json'))
     model = ModelCustomHeadEnsemble(S, hg_model)
     return model
 
@@ -509,6 +549,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     ml_logger.log_params(st)
     ml_logger.log_params(sm)
     tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
+    tokenizer.save_pretrained(OUTPUTDIR)
     oof_preds = np.zeros((df.shape[0]))
 
     for fold in range(st['num_folds']):
@@ -520,7 +561,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         valid_dataloader = get_dataloader(valid_ds, st['test_batch_size'], st['num_workers'], Mode.VALID)
         st['num_batches'] = len(train_dataloader)
         st['num_total_steps'] = len(train_dataloader) * st['num_epochs']
-        model = get_model(sm).to(s['device'])
+        model = get_model(sm['model_name']).to(s['device'])
 
         # training
         loss_fn = get_loss_fn(st)
@@ -537,7 +578,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
         LOGGER.info(f'rmse_{fold}: {score}')
         ml_logger.log_metric(f'metric_{fold}', score)
         oof_preds[df_valid.index] = val_preds
-        model.model.config.save_pretrained(CKPTDIR)  # type: ignore
+        model.model.config.save_pretrained(OUTPUTDIR)  # type: ignore
         del trainer, model, state_dict, optimizer, scheduler, loss_fn
         del train_ds, valid_ds, train_dataloader, valid_dataloader
         gc.collect()
@@ -547,7 +588,7 @@ def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
 
     score = mean_squared_error(df[st['target_column']].values, oof_preds, squared=False)
     ml_logger.log_metric('metric', score)
-    pickle.dump(oof_preds, open(CKPTDIR / 'oof_preds.pkl', 'wb'))
+    pickle.dump(oof_preds, open(OUTPUTDIR / 'oof_preds.pkl', 'wb'))
     LOGGER.info(f'training finished. Metric: {score:.3f}')
     return oof_preds
 
@@ -586,47 +627,60 @@ def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.Dat
     return preds
 
 
-def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
+def infer(s: Dict[str, Any], df: pd.DataFrame):
     st = s['training']
     sm = s['model']
-    tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(CKPTDIR)
+    except Exception:
+        tokenizer = AutoTokenizer.from_pretrained(sm['model_name'])
+        tokenizer.save_pretrained(OUTPUTDIR)
     test_preds = np.zeros((len(df)))
     for fold in range(st['num_folds']):
         LOGGER.info(f'inference fold {fold} started.')
         ds = MyDataset(s, df, tokenizer, Mode.TEST, fold)
         dataloader = get_dataloader(ds, st['test_batch_size'], st['num_workers'], Mode.TEST)
-        model = get_model(sm)
+        model = get_model(sm['model_name'], use_pretrained=False)
         model.load_state_dict(torch.load(CKPTDIR / f'model_{fold}.pt'))
         preds = test(s, model, dataloader, df)
         test_preds += preds / st['num_folds']
         if st.get('use_only_fold', False):
             break
     LOGGER.info('inference finished.')
-    pickle.dump(test_preds, open(CKPTDIR / 'test_preds.pkl', 'wb'))
+    pickle.dump(test_preds, open(OUTPUTDIR / 'test_preds.pkl', 'wb'))
     return test_preds
 
 
-def submit(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame, preds: np.ndarray) -> None:
+def submit(s: Dict[str, Any], df: pd.DataFrame, preds: np.ndarray) -> None:
     df[s['training']['target_column']] = preds
-    df.to_csv(CKPTDIR / 'submission.csv', index=False)
+    df.to_csv(OUTPUTDIR / 'submission.csv', index=False)
+
+
+def train_with_logger(s: Dict[str, Any], df: pd.DataFrame) -> np.ndarray:
+    ml_logger = MLLogger('cfiken', CKPTDIR)
+    with ml_logger.start(experiment_name=S['competition'], run_name=S['name']):
+        ml_logger.save_config(S)
+        return train(s, ml_logger, df)
 
 
 def run(gpu_index: int = 0):
-    ml_logger = MLLogger('cfiken', CKPTDIR)
     S['device'] = f'cuda:{gpu_index}'
-    with ml_logger.start(experiment_name=S['competition'], run_name=S['name']):
-        ml_logger.save_config(S)
-        if S['do_training']:
-            train(S, ml_logger, DF_TRAIN.copy())
-        if S['do_inference']:
-            test_preds = infer(S, ml_logger, DF_TEST.copy())
-        if S['do_submit']:
-            submit(S, ml_logger, DF_SUB.copy(), test_preds)
+    if S['do_training']:
+        train_with_logger(S, DF_TRAIN.copy())
+    if S['do_inference']:
+        test_preds = infer(S, DF_TEST.copy())
+    if S['do_submit']:
+        submit(S, DF_SUB.copy(), test_preds)
 
 
 if __name__ == '__main__':
-    args = parse()
-    LOGGER.info(f'starting with args: {args}')
-    os.environ['TOKENIZERS_PARALLELISM'] = 'true'
-    fix_seed(S['seed'])
-    run(int(args.gpus))
+    if IS_KAGGLE:
+        LOGGER.info('Starting in kaggle environment')
+        fix_seed(S['seed'])
+        run()
+    else:
+        args = parse()
+        LOGGER.info(f'Starting with args: {args}')
+        os.environ['TOKENIZERS_PARALLELISM'] = 'true'
+        fix_seed(S['seed'])
+        run(int(args.gpus))
