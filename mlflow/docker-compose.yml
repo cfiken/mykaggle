@@ -12,7 +12,6 @@ services:
         "--default-artifact-root", "s3://cfiken-kaggle/mlflow",
         "--backend-store-uri", "mysql://${DB_USER}:${DB_PASS}@${DB_HOST}:3306/mlflow"
     ]
-    container_name: mlflow
     restart: "no"
     ports:
       - target: 5000
