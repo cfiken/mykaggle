@@ -44,10 +44,7 @@ autopep8 = "*"
 
 [tool.mypy]
 ignore_missing_imports = true
-exclude = [
-  'jupyter_notebook_config\.py$',
-  'mykaggle/lib/ml_logger\.py$',
-]
+exclude = '^jupyter_notebook_config\.py$'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
