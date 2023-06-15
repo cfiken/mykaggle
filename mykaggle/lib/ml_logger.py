@@ -5,7 +5,7 @@ import contextlib
 from enum import Enum
 import json
 import yaml
-import mlflow
+import mlflow as mlflow
 import torch
 from torch import nn
 import numpy as np
@@ -74,8 +74,8 @@ class MLLogger:
     @contextlib.contextmanager
     def start(self, experiment_name: str, run_name: str) -> Generator:
         if OutputType.MLFLOW in self._output_types:
-            mlflow.set_experiment(experiment_name)
-            with mlflow.start_run(run_name=run_name):
+            mlflow.set_experiment(experiment_name)  # type: ignore
+            with mlflow.start_run(run_name=run_name):  # type: ignore
                 self.log_running()
                 self.log_user(self._user)
                 try:
@@ -108,7 +108,7 @@ class MLLogger:
                 tf.summary.text('Hyperparameter', json_text, 0)
 
         if OutputType.MLFLOW in self._output_types:
-            mlflow.log_params(params)
+            mlflow.log_params(params)  # type: ignore
 
         if OutputType.STD in self._output_types:
             logger.info(params)
@@ -127,7 +127,7 @@ class MLLogger:
 
         metrics = {k: v.numpy() for k, v in metrics.items()}
         if OutputType.MLFLOW in self._output_types:
-            mlflow.log_metrics(metrics, step=step)
+            mlflow.log_metrics(metrics, step=step)  # type: ignore
 
         if OutputType.STD in self._output_types:
             for k, v in metrics.items():
@@ -146,7 +146,7 @@ class MLLogger:
             with self._summary_writer.as_default():
                 tf.summary.scalar(name, value, step=step)
         if OutputType.MLFLOW in self._output_types:
-            mlflow.log_metric(name, value.numpy(), step=step)
+            mlflow.log_metric(name, value.numpy(), step=step)  # type: ignore
         if OutputType.STD in self._output_types:
             logger.info(f'{name}: {value}')
 
@@ -159,7 +159,7 @@ class MLLogger:
         :param step: 現在の step, 学習中出ない場合は 0 で入れれば良い
         '''
         if OutputType.MLFLOW in self._output_types:
-            mlflow.log_metrics(metrics, step=step)
+            mlflow.log_metrics(metrics, step=step)  # type: ignore
 
     def log_metric(self, name: str, metric: float, step: int = 0) -> None:
         '''
@@ -171,7 +171,7 @@ class MLLogger:
         :param step: 現在の step, 学習中出ない場合は 0 で入れれば良い
         '''
         if OutputType.MLFLOW in self._output_types:
-            mlflow.log_metric(name, metric, step=step)
+            mlflow.log_metric(name, metric, step=step)  # type: ignore
 
     def save_model(
         self,
@@ -227,7 +227,7 @@ class MLLogger:
         ユーザ名を記録します。
         :param user: ユーザ名
         '''
-        mlflow.set_tag('user', user)
+        mlflow.set_tag('user', user)  # type: ignore
 
     def log_artifact(self, file: str, artifact_path: Optional[str] = None) -> None:
         '''
@@ -237,7 +237,7 @@ class MLLogger:
         '''
         if OutputType.MLFLOW in self._output_types:
             try:
-                mlflow.log_artifact(file)
+                mlflow.log_artifact(file)  # type: ignore
             except Exception as e:
                 logger.error(f'ERROR: log_artifacts failed. error: {e}')
 
@@ -249,7 +249,7 @@ class MLLogger:
         '''
         if OutputType.MLFLOW in self._output_types:
             try:
-                mlflow.log_artifacts(dir, artifact_path=artifact_path)
+                mlflow.log_artifacts(dir, artifact_path=artifact_path)  # type: ignore
             except Exception as e:
                 logger.error(f'ERROR: log_artifacts failed. error: {e}')
 
@@ -291,7 +291,7 @@ class MLLogger:
 
     def _log_status(self, status: StatusType) -> None:
         if OutputType.MLFLOW in self._output_types:
-            mlflow.set_tag('status', status.value)
+            mlflow.set_tag('status', status.value)  # type: ignore
 
     def _assert_env(self) -> None:
         if OutputType.MLFLOW not in self._output_types:

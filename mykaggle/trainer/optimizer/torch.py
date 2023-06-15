@@ -1,6 +1,6 @@
 from typing import Any, Dict
 import torch
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import LRScheduler
 from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 
 
@@ -29,7 +29,7 @@ def get_optimizer(name: str, lr: float, weight_decay: float, parameters, **kwarg
 
 def get_scheduler(settings: Dict[str, Any], optimizer: torch.optim.Optimizer):
     scheduler_name = settings.get('scheduler')
-    scheduler: _LRScheduler
+    scheduler: LRScheduler
     if scheduler_name is None:
         return None
     elif scheduler_name == 'ExponentialDecay':
