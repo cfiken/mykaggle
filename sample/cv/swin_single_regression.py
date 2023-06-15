@@ -13,7 +13,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from torch.cuda.amp import autocast, GradScaler
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import LRScheduler
 from transformers import AutoModel, PreTrainedModel
 from transformers import get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 from fastprogress.fastprogress import master_bar, progress_bar
@@ -373,9 +373,9 @@ def get_optimizer(name: str, lr: float, weight_decay: float, parameters, **kwarg
     return optimizer
 
 
-def get_scheduler(s: Dict[str, Any], optimizer: torch.optim.Optimizer) -> Optional[_LRScheduler]:
+def get_scheduler(s: Dict[str, Any], optimizer: torch.optim.Optimizer) -> Optional[LRScheduler]:
     scheduler_name = s.get('scheduler')
-    scheduler: _LRScheduler
+    scheduler: LRScheduler
     if scheduler_name is None:
         return None
     elif scheduler_name == 'ExponentialDecay':
@@ -429,7 +429,7 @@ class Trainer:
         model: nn.Module,
         loss_fn: nn.Module,
         optimizer: torch.optim.Optimizer,
-        scheduler: Optional[_LRScheduler],
+        scheduler: Optional[LRScheduler],
         *args, **kwargs
     ) -> None:
         model.train()
@@ -459,7 +459,7 @@ class Trainer:
         model: nn.Module,
         loss_fn: nn.Module,
         optimizer: torch.optim.Optimizer,
-        scheduler: Optional[_LRScheduler],
+        scheduler: Optional[LRScheduler],
         num_steps_per_epoch: int
     ):
         inputs = inputs.to(self.device).float()
