@@ -34,6 +34,8 @@ from mykaggle.lib.ops import sigmoid
 from mykaggle.lib.routine import fix_seed, get_logger, parse
 from mykaggle.model.common import AttentionHead
 from mykaggle.trainer.base import Mode
+from mykaggle.lib.logger.logger import Logger
+from mykaggle.lib.logger.factory import LoggerFactory, LoggerType
 
 #
 # Settings
@@ -68,7 +70,7 @@ training:
     batch_scheduler: true
     max_length: 512
     warmup_epochs: 0.3
-    logger_verbose_step: 10
+    logger_verbose_step: 100
     ckpt_callback_verbose: true
     val_check_interval: 1000000
     optimizer: AdamW
@@ -99,10 +101,7 @@ fix_seed()
 LOGGER = get_logger(__name__)
 
 if not IS_KAGGLE:
-    from mykaggle.lib.ml_logger import MLLogger
     torch.multiprocessing.set_sharing_strategy('file_system')
-else:
-    MLLogger = Any  # type: ignore
 
 if IS_KAGGLE:
     DATADIR = Path('/kaggle/input/') / S["competition"]
@@ -401,7 +400,7 @@ class Trainer:
         self,
         s: Dict[str, Any],
         ckptdir: Path,
-        ml_logger: MLLogger,
+        ml_logger: Logger,
         fold: int = 0,
         *args, **kwargs
     ) -> None:
@@ -483,7 +482,7 @@ class Trainer:
             self._log_metric(f'train_loss_{self.fold}', loss_value, self.global_step, st['logger_verbose_step'])
 
             if self.fold == 0 and scheduler is not None:
-                self._log_metric('lr', scheduler.get_last_lr()[0], step=self.global_step)
+                self._log_metric('lr', scheduler.get_last_lr()[0], self.global_step, st['logger_verbose_step'])
 
     def evaluate(
         self,
@@ -530,7 +529,7 @@ class Trainer:
         return preds, targets
 
     def save_model(self, model: nn.Module, fold: int) -> None:
-        self.ml_logger.save_torch_model(model, f'model_{fold}.pt')
+        self.ml_logger.save_model(model, f'model_{fold}.pt')
 
     def upload_model(self, fold: int) -> None:
         LOGGER.info('Uploding model ...')
@@ -543,7 +542,7 @@ class Trainer:
             self.ml_logger.log_metric(name, value, step)
 
 
-def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
+def train(s: Dict[str, Any], ml_logger: Logger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
     ml_logger.log_params(st)
@@ -658,7 +657,8 @@ def submit(s: Dict[str, Any], df: pd.DataFrame, preds: np.ndarray) -> None:
 
 
 def train_with_logger(s: Dict[str, Any], df: pd.DataFrame) -> np.ndarray:
-    ml_logger = MLLogger('cfiken', CKPTDIR)
+    logger_type = LoggerType.STD if IS_KAGGLE else LoggerType.MLFLOW
+    ml_logger = LoggerFactory.create(logger_type, 'cfiken', CKPTDIR)
     with ml_logger.start(experiment_name=S['competition'], run_name=S['name']):
         ml_logger.save_config(S)
         return train(s, ml_logger, df)
