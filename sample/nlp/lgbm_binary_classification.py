@@ -19,7 +19,8 @@ from mykaggle.feature.base import Feature
 from mykaggle.lib.lgbm_util import compute_importances, save_importances
 from mykaggle.lib.plot import plot_confusion_matrix
 from mykaggle.lib.routine import timer, fix_seed, get_logger
-from mykaggle.lib.ml_logger import MLLogger
+from mykaggle.lib.logger.logger import Logger
+from mykaggle.lib.logger.factory import LoggerFactory, LoggerType
 
 
 #
@@ -28,6 +29,7 @@ from mykaggle.lib.ml_logger import MLLogger
 
 
 IS_DEBUG = False
+IS_KAGGLE = False
 S = yaml.safe_load('''
 name: 'nlp_lgbm_binary_classification'
 competition: sample
@@ -266,7 +268,7 @@ def get_features(
 
 def train(
     s: Dict[str, Any],
-    logger: MLLogger,
+    logger: Logger,
     df: pd.DataFrame,
     df_test: pd.DataFrame,
 ) -> Tuple[np.ndarray, ...]:
@@ -311,7 +313,7 @@ def train(
         logger.log_metric(f'f1_fold{fold}', fold_score)
         LOGGER.info(f'Fold {fold} Macro-F1: {fold_score:.4f}')
         model.save(str(CKPTDIR / f'model_{fold}.txt'))
-        logger.log_artifact(str(CKPTDIR / f'model_{fold}.txt'))
+        logger.upload_model(str(CKPTDIR / f'model_{fold}.txt'))
 
     score = roc_auc_score(y, oof_preds)
     logger.log_metric('auc', score)
@@ -324,7 +326,8 @@ def train(
 
 
 def do_training(settings: Dict[str, Any], df_train: pd.DataFrame, df_test: pd.DataFrame):
-    ml_logger = MLLogger('cfiken', CKPTDIR)
+    logger_type = LoggerType.STD if IS_KAGGLE else LoggerType.MLFLOW
+    ml_logger = LoggerFactory.create(logger_type, 'cfiken', CKPTDIR)
     with ml_logger.start(experiment_name=settings['competition'], run_name=settings['name']):
         ml_logger.save_config(settings)
         _, test_preds = train(settings, ml_logger, df_train, df_test)

@@ -33,12 +33,16 @@ from fastprogress.fastprogress import master_bar, progress_bar
 from mykaggle.lib.routine import fix_seed, get_logger, parse
 from mykaggle.model.common import AttentionHead
 from mykaggle.trainer.base import Mode
+from mykaggle.lib.logger.logger import Logger
+from mykaggle.lib.logger.factory import LoggerFactory, LoggerType
+
 
 #
 # Settings
 #
 
 IS_DEBUG = True
+IS_KAGGLE = False
 S = yaml.safe_load('''
 name: 'nlp_bert_regression'
 competition: test
@@ -98,11 +102,6 @@ SM = S['model']
 fix_seed()
 LOGGER = get_logger(__name__)
 
-if not IS_KAGGLE:
-    from mykaggle.lib.ml_logger import MLLogger
-    torch.multiprocessing.set_sharing_strategy('file_system')
-else:
-    MLLogger = Any  # type: ignore
 
 if IS_KAGGLE:
     DATADIR = Path('/kaggle/input/') / S["competition"]
@@ -401,7 +400,7 @@ class Trainer:
         self,
         s: Dict[str, Any],
         ckptdir: Path,
-        ml_logger: MLLogger,
+        ml_logger: Logger,
         fold: int = 0,
         *args, **kwargs
     ) -> None:
@@ -530,7 +529,7 @@ class Trainer:
         return preds, targets
 
     def save_model(self, model: nn.Module, fold: int) -> None:
-        self.ml_logger.save_torch_model(model, f'model_{fold}.pt')
+        self.ml_logger.save_model(model, f'model_{fold}.pt')
 
     def upload_model(self, fold: int) -> None:
         LOGGER.info('Uploding model ...')
@@ -543,7 +542,7 @@ class Trainer:
             self.ml_logger.log_metric(name, value, step)
 
 
-def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
+def train(s: Dict[str, Any], ml_logger: Logger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
     ml_logger.log_params(st)
@@ -657,7 +656,8 @@ def submit(s: Dict[str, Any], df: pd.DataFrame, preds: np.ndarray) -> None:
 
 
 def train_with_logger(s: Dict[str, Any], df: pd.DataFrame) -> np.ndarray:
-    ml_logger = MLLogger('cfiken', CKPTDIR)
+    logger_type = LoggerType.STD if IS_KAGGLE else LoggerType.MLFLOW
+    ml_logger = LoggerFactory.create(logger_type, 'cfiken', CKPTDIR)
     with ml_logger.start(experiment_name=S['competition'], run_name=S['name']):
         ml_logger.save_config(S)
         return train(s, ml_logger, df)

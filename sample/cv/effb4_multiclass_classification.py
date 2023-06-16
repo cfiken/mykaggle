@@ -22,15 +22,17 @@ import albumentations as al
 from albumentations.pytorch import ToTensorV2
 import timm
 
-from mykaggle.lib.ml_logger import MLLogger
 from mykaggle.lib.routine import fix_seed, get_logger, parse
 from mykaggle.model.common import AttentionHead
 from mykaggle.trainer.base import Mode
+from mykaggle.lib.logger.logger import Logger
+from mykaggle.lib.logger.factory import LoggerFactory, LoggerType
 
 #
 # Settings
 #
 
+IS_KAGGLE = False
 IS_DEBUG = True
 S = yaml.safe_load('''
 name: 'cv_effb4_multiclass_cllasification'
@@ -403,7 +405,7 @@ class Trainer:
         self,
         s: Dict[str, Any],
         ckptdir: Path,
-        ml_logger: MLLogger,
+        ml_logger: Logger,
         fold: int = 0,
         *args, **kwargs
     ) -> None:
@@ -530,7 +532,7 @@ class Trainer:
         return preds, targets
 
     def save_model(self, model: nn.Module, fold: int) -> None:
-        self.ml_logger.save_torch_model(model, f'model_{fold}.pt')
+        self.ml_logger.save_model(model, f'model_{fold}.pt')
 
     def upload_model(self, fold: int) -> None:
         LOGGER.info('Uploding model ...')
@@ -543,7 +545,7 @@ class Trainer:
             self.ml_logger.log_metric(name, value, step)
 
 
-def train(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
+def train(s: Dict[str, Any], ml_logger: Logger, df: pd.DataFrame):
     st = s['training']
     sm = s['model']
     ml_logger.log_params(st)
@@ -629,7 +631,7 @@ def test(s: Dict[str, Any], model: nn.Module, dataloader: DataLoader, df: pd.Dat
     return preds
 
 
-def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
+def infer(s: Dict[str, Any], df: pd.DataFrame):
     st = s['training']
     sm = s['model']
     test_preds = np.zeros((len(df), sm['num_classes']))
@@ -648,22 +650,27 @@ def infer(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame):
     return test_preds
 
 
-def submit(s: Dict[str, Any], ml_logger: MLLogger, df: pd.DataFrame, preds: np.ndarray) -> None:
+def submit(s: Dict[str, Any], df: pd.DataFrame, preds: np.ndarray) -> None:
     df[s['training']['target_column']] = np.argmax(preds, -1)
     df.to_csv(CKPTDIR / 'submission.csv', index=False)
 
 
-def run(gpu_index: int = 0):
-    ml_logger = MLLogger('cfiken', CKPTDIR)
-    S['device'] = f'cuda:{gpu_index}'
+def train_with_logger(s: Dict[str, Any], df: pd.DataFrame) -> np.ndarray:
+    logger_type = LoggerType.STD if IS_KAGGLE else LoggerType.MLFLOW
+    ml_logger = LoggerFactory.create(logger_type, 'cfiken', CKPTDIR)
     with ml_logger.start(experiment_name=S['competition'], run_name=S['name']):
         ml_logger.save_config(S)
-        if S['do_training']:
-            train(S, ml_logger, DF_TRAIN.copy())
-        if S['do_inference']:
-            test_preds = infer(S, ml_logger, DF_TEST.copy())
-        if S['do_submit']:
-            submit(S, ml_logger, DF_SUB.copy(), test_preds)
+        return train(s, ml_logger, df)
+
+
+def run(gpu_index: int = 0):
+    S['device'] = f'cuda:{gpu_index}'
+    if S['do_training']:
+        train_with_logger(S, DF_TRAIN.copy())
+    if S['do_inference']:
+        test_preds = infer(S, DF_TEST.copy())
+    if S['do_submit']:
+        submit(S, DF_SUB.copy(), test_preds)
 
 
 if __name__ == '__main__':
